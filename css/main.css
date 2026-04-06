@@ -2679,6 +2679,9 @@ header {
   .dc-item[id="qtdReceitas"],
   .dc-item[id="qtdDespesas"] { display: none !important; }
 
+  /* Projeção Caixa no orçamento: oculto no mobile */
+  .prov-projecao-caixa { display: none !important; }
+
   /* Filtros em coluna */
   .filters {
     flex-direction: column !important;

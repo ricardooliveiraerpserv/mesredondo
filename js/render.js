@@ -2058,7 +2058,7 @@ function renderProvisao(despesas) {
               </div>
             </div>
             <!-- Acumulado -->
-            <div style="background:rgba(79,168,255,0.05);border:1px solid rgba(79,168,255,0.15);border-radius:7px;padding:8px 10px;">
+            <div class="prov-projecao-caixa" style="background:rgba(79,168,255,0.05);border:1px solid rgba(79,168,255,0.15);border-radius:7px;padding:8px 10px;">
               <div style="font-size:0.58rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">📊 Projeção Caixa</div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
                 <span style="font-size:0.62rem;color:var(--muted)">Prov.</span>
@@ -2159,7 +2159,7 @@ function renderProvisao(despesas) {
               <div style="height:1px;background:var(--border);margin:4px 0;"></div>
               <div style="display:flex;justify-content:space-between;"><span style="font-size:0.62rem;color:var(--muted)">Disponível</span><span style="font-family:'Space Mono',monospace;font-size:0.72rem;font-weight:800;color:${totSaldoMesC}">${fSaldoMes>=0?'':'-'}${fmt(Math.abs(fSaldoMes))}</span></div>
             </div>
-            <div style="background:rgba(79,168,255,0.05);border:1px solid rgba(79,168,255,0.15);border-radius:7px;padding:8px 10px;">
+            <div class="prov-projecao-caixa" style="background:rgba(79,168,255,0.05);border:1px solid rgba(79,168,255,0.15);border-radius:7px;padding:8px 10px;">
               <div style="font-size:0.58rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">📊 Projeção Caixa</div>
               <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:0.62rem;color:var(--muted)">Prov.</span><span style="font-family:'Space Mono',monospace;font-size:0.72rem;font-weight:700;color:var(--accent2)">${fmt(fProvAcum)}</span></div>
               <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:0.62rem;color:var(--muted)">Gasto</span><span style="font-family:'Space Mono',monospace;font-size:0.72rem;font-weight:700;color:#ef4444">${fmt(fGastoAcum)}</span></div>
