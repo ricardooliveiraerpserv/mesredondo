@@ -1551,18 +1551,17 @@ function _renderInsights(resultado, receita, despesa) {
       tipo: 'danger',
       icon: '🔴',
       titulo: 'Mês vai fechar negativo',
-      corpo: `-R$ ${fmt2(resultado)}`,
-      meta: topCausas ? `Principais causas: ${topCausas}` : `Despesa supera receita em R$ ${fmt2(resultado)}`,
-      cta: topCausas ? 'Ver categorias' : null,
-      ctaAcao: topCausas ? `showTab('lancamentos', document.querySelector('.nav-tab'))` : null
+      corpo: `-${fmt2(resultado)}`,
+      meta: topCausas ? `Causas: ${topCausas}` : `Despesa supera receita em ${fmt(Math.abs(resultado))}`,
+      cta: null
     });
   } else if (resultado > 0) {
     insights.push({
       tipo: 'ok',
       icon: '✅',
       titulo: 'Mês vai fechar positivo',
-      corpo: `+R$ ${fmt2(resultado)}`,
-      meta: `Você está R$ ${fmt2(resultado)} acima das despesas`,
+      corpo: `+${fmt2(resultado)}`,
+      meta: `${fmt(resultado)} acima das despesas`,
       cta: null
     });
   } else {
@@ -1571,7 +1570,7 @@ function _renderInsights(resultado, receita, despesa) {
       icon: '⚠️',
       titulo: 'Mês no limite',
       corpo: 'R$ 0,00',
-      meta: 'Receita e despesa estão equilibradas',
+      meta: 'Receita e despesa equilibradas',
       cta: null
     });
   }
@@ -1584,18 +1583,16 @@ function _renderInsights(resultado, receita, despesa) {
       icon: top.pct > 200 ? '🚨' : '⚠️',
       titulo: 'Maior excesso',
       corpo: top.nome,
-      meta: `${top.pct}% do previsto — R$ ${fmt2(top.excesso)} acima`,
-      cta: 'Ver lançamentos',
-      ctaAcao: `showTab('lancamentos', document.querySelector('.nav-tab'))`
+      meta: `${top.pct}% do previsto · ${fmt(top.excesso)} acima`,
+      cta: null
     });
   } else if (resultado >= 0) {
-    // Sem excessos — insight positivo
     insights.push({
       tipo: 'ok',
       icon: '💚',
       titulo: 'Sem excessos',
       corpo: 'Tudo dentro do previsto',
-      meta: 'Todas as categorias estão dentro do orçamento',
+      meta: 'Todas categorias no orçamento',
       cta: null
     });
   }
@@ -1607,19 +1604,18 @@ function _renderInsights(resultado, receita, despesa) {
       tipo: 'warning',
       icon: '🎯',
       titulo: 'Ação recomendada',
-      corpo: `Cortar R$ ${fmt2(corteDiario)}/dia`,
-      meta: `${diasRestantes} dia${diasRestantes>1?'s':''} restante${diasRestantes>1?'s':''} para zerar o mês`,
+      corpo: `Cortar ${fmt(corteDiario)}/dia`,
+      meta: `${diasRestantes} dia${diasRestantes>1?'s':''} restantes para zerar`,
       cta: null
     });
   } else {
-    // Sem problema — mostrar taxa de poupança
     const pct = receita > 0 ? Math.round((resultado/receita)*100) : 0;
     insights.push({
       tipo: 'ok',
       icon: '📈',
       titulo: 'Taxa de sobra',
       corpo: `${pct}% da receita`,
-      meta: `R$ ${fmt2(resultado)} sobrando de R$ ${fmt2(receita)} recebido`,
+      meta: `${fmt(resultado)} sobrando`,
       cta: null
     });
   }
@@ -1628,9 +1624,11 @@ function _renderInsights(resultado, receita, despesa) {
   block.innerHTML = insights.map(ins => `
     <div class="insight insight-${ins.tipo}">
       <div class="i-icon">${ins.icon}</div>
-      <div class="i-title">${ins.titulo}</div>
-      <div class="i-body">${ins.corpo}</div>
-      ${ins.meta ? `<div class="i-meta">${ins.meta}</div>` : ''}
+      <div class="i-content">
+        <div class="i-title">${ins.titulo}</div>
+        <div class="i-body">${ins.corpo}</div>
+        ${ins.meta ? `<div class="i-meta">${ins.meta}</div>` : ''}
+      </div>
     </div>
   `).join('');
 }
