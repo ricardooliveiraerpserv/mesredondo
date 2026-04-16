@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"🧠 ATUALIZAR CÉREBRO OBRIGATÓRIO: Antes de encerrar, atualize o cofre Obsidian em /Users/ricardodeoliveirasilva/Documents/Obsidian Vault/MES REDONDO/ com tudo que foi feito nesta sessão. Arquivos a revisar: _INDEX.md (status atual), proximos-passos.md (marcar concluídos / adicionar novos), problemas-conhecidos.md (atualizar status dos bugs). Não encerre sem fazer isso.\"}'",
+            "statusMessage": "Atualizando cérebro Obsidian..."
+          }
+        ]
+      }
+    ]
+  }
+}
