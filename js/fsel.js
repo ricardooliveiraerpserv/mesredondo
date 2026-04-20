@@ -76,7 +76,7 @@
     var html = '';
     opts.forEach(function(o){
       html += '<label class="fsel-opt" data-val="'+o.value.replace(/"/g,'&quot;')+'">'+
-        '<input type="checkbox" class="fsel-chk" onclick="event.stopPropagation();event.preventDefault();">'+
+        '<input type="checkbox" class="fsel-chk" onclick="event.preventDefault();">'+
         '<span>'+o.text+'</span>'+
         '</label>';
     });
