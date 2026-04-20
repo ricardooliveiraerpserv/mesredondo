@@ -96,9 +96,7 @@
           }
         } else {
           if(st.size === 0){
-            var newSt = new Set();
-            opts.forEach(function(o){ if(o.value !== '' && o.value !== v) newSt.add(o.value); });
-            _state[selId] = newSt.size > 0 ? newSt : new Set();
+            _state[selId] = new Set([v]);
           } else {
             if(st.has(v)){
               st.delete(v);
