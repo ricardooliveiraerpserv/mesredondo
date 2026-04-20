@@ -115,12 +115,12 @@
       };
       d.addEventListener('click', _handleOpt);
       d.addEventListener('touchstart', function(e){
-        // Marca que foi tocado para evitar duplo disparo com click
         this._touched = true;
       }, {passive: true});
       d.addEventListener('touchend', function(e){
         if(this._touched){
           this._touched = false;
+          e.preventDefault(); // impede o click subsequente no touch — sem isso _handleOpt dispara 2x e cancela o filtro
           _handleOpt.call(this, e);
         }
       });
