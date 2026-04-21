@@ -432,32 +432,37 @@ async function _diagLoad() {
   var memLen = _memCache && _memCache.lancamentos ? _memCache.lancamentos.length : 0;
 
   var msg = '🔬 DIAGNÓSTICO\n\n';
-  msg += 'UID: ' + (uid || 'NÃO ENCONTRADO') + '\n';
+  msg += 'UID: ' + (uid ? uid.slice(0,8)+'...' : 'NÃO ENCONTRADO') + '\n';
   msg += 'Token: ' + (token ? token.slice(0,20) + '...' : 'NÃO ENCONTRADO') + '\n';
-  msg += 'memCache.lancamentos: ' + memLen + ' itens\n\n';
+  msg += 'memCache: ' + memLen + ' itens\n\n';
 
-  if (!uid || !token) { alert(msg + '❌ Sem autenticação — impossível carregar.'); return; }
+  if (!uid || !token) { alert(msg + '❌ Sem autenticação.'); return; }
 
+  // Teste 1: fetch direto
   try {
-    var res = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid + '&limit=5&select=id,mes,ano', {
+    var res = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid + '&limit=3&select=id,mes,ano', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token }
     });
-    msg += 'GET /mf_lancamentos → HTTP ' + res.status + '\n';
     var data = await res.json();
-    msg += 'Retornou: ' + (Array.isArray(data) ? data.length : 'ERRO') + ' itens (limit 5)\n';
-    if (Array.isArray(data) && data.length > 0) {
-      msg += 'Primeiro: mes=' + data[0].mes + ' ano=' + data[0].ano + '\n';
-    }
-  } catch(e) {
-    msg += 'ERRO na requisição: ' + e.message + '\n';
-  }
+    msg += 'Fetch direto → HTTP ' + res.status + '\n';
+    msg += Array.isArray(data) ? data.length + ' itens retornados\n' : 'Erro: ' + JSON.stringify(data).slice(0,100) + '\n';
+    if (Array.isArray(data) && data.length > 0) msg += 'Ex: mes=' + data[0].mes + ' ano=' + data[0].ano + '\n';
+  } catch(e) { msg += 'Fetch direto ERRO: ' + e.message + '\n'; }
 
+  // Teste 2: dbLoadLancamentos (caminho normal do app)
+  try {
+    var lncs = await dbLoadLancamentos();
+    msg += '\ndbLoadLancamentos → ' + (lncs ? lncs.length : 0) + ' itens\n';
+    if (lncs && lncs.length > 0) msg += 'Ex: mes=' + lncs[0].mes + ' ano=' + lncs[0].ano + '\n';
+  } catch(e) { msg += '\ndbLoadLancamentos ERRO: ' + e.message + '\n'; }
+
+  // Teste 3: contar no banco
   try {
     var res2 = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid + '&select=id', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token, 'Prefer': 'count=exact', 'Range': '0-0' }
     });
     var cr = res2.headers.get('content-range');
-    msg += 'Total no banco: ' + (cr ? cr.split('/')[1] : '?') + ' registros\n';
+    msg += '\nTotal no Supabase: ' + (cr ? cr.split('/')[1] : '?') + '\n';
   } catch(e) {}
 
   alert(msg);

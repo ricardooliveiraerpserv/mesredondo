@@ -344,8 +344,13 @@ window._markLocalDirty = window._markLocalDirty || function() { /* no-op */ };
 // Chamado por _onLogin() em sync-auth.js após autenticação
 window._loadAllData = async function() {
   try {
-    var lncs  = await dbLoadLancamentos();   _memCache.lancamentos = lncs  || [];
-  } catch(e) { _memCache.lancamentos = []; }
+    var lncs  = await dbLoadLancamentos();
+    _memCache.lancamentos = lncs  || [];
+    console.log('[compat] _loadAllData lancamentos:', _memCache.lancamentos.length);
+  } catch(e) {
+    console.error('[compat] _loadAllData ERRO lancamentos:', e.message);
+    _memCache.lancamentos = [];
+  }
   try {
     var cats  = await dbLoadCategorias();    _memCache.categorias  = cats  || [];
   } catch(e) { _memCache.categorias = []; }
