@@ -2450,6 +2450,13 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
         </div>
       </div>
 
+      <!-- Abas: Novos / Duplicados / Não identificados -->
+      <div id="imp-tab-bar" style="display:none;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border);">
+        <button id="imp-tab-btn-new" onclick="switchImportTab('new')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);padding:7px 16px;font-size:0.8rem;cursor:pointer;font-family:var(--font)">✚ Novos <span id="imp-tab-badge-new" style="background:rgba(74,240,160,0.15);color:var(--accent);border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">0</span></button>
+        <button id="imp-tab-btn-dups" onclick="switchImportTab('dups')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);padding:7px 16px;font-size:0.8rem;cursor:pointer;font-family:var(--font)">⚠️ Duplicados <span id="imp-tab-badge-dups" style="background:rgba(239,68,68,0.12);color:#ef4444;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">0</span></button>
+        <button id="imp-tab-btn-naoid" onclick="switchImportTab('naoid')" style="background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);padding:7px 16px;font-size:0.8rem;cursor:pointer;font-family:var(--font)">❓ Não identificados <span id="imp-tab-badge-naoid" style="background:rgba(251,146,60,0.12);color:#fb923c;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">0</span></button>
+      </div>
+
       <!-- Tabela: Duplicados -->
       <div id="imp-section-dups" style="display:none;margin-bottom:16px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -2580,6 +2587,12 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 </div>
 
 <!-- MODAL: DEPLOY GITHUB -->
+<!-- Picker de categoria flutuante (compartilhado para todas as linhas do import) -->
+<div id="importCatPicker" style="display:none;position:fixed;z-index:99999;background:var(--surface2);border:1px solid var(--border);border-radius:8px;min-width:220px;max-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
+  <input id="importCatSearch" type="text" placeholder="🔍 Buscar categoria..." autocomplete="off" oninput="_filterImportCatList()" style="width:100%;box-sizing:border-box;background:var(--surface);border:none;border-bottom:1px solid var(--border);color:var(--text);padding:8px 12px;font-size:0.78rem;font-family:var(--font);outline:none;border-radius:8px 8px 0 0">
+  <div id="importCatList" style="max-height:220px;overflow-y:auto;padding:4px 0"></div>
+</div>
+
 <div class="modal-overlay" id="deployModalOverlay">
   <div class="modal" style="width:460px;max-width:95vw">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -3033,7 +3046,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202604062004"></script>
+<script src="js/render.js?v=202604211800"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
 <script src="js/areceber-apagar.js?v=202604052000"></script>

@@ -3642,6 +3642,79 @@ function clearImportFilters() {
 }
 
 
+function switchImportTab(tab) {
+  ['dups','new','naoid'].forEach(function(t) {
+    var sec = document.getElementById('imp-section-' + t);
+    var btn = document.getElementById('imp-tab-btn-' + t);
+    if (sec) sec.style.display = t === tab ? 'block' : 'none';
+    if (btn) {
+      btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === tab ? 'var(--text)' : 'var(--text2)';
+    }
+  });
+}
+
+var _importCatPickerTarget = null;
+function _openImportCatPicker(btn) {
+  var picker = document.getElementById('importCatPicker');
+  if (!picker) return;
+  var rect = btn.getBoundingClientRect();
+  var spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow >= 280) {
+    picker.style.top = (rect.bottom + 4) + 'px';
+    picker.style.bottom = 'auto';
+  } else {
+    picker.style.top = 'auto';
+    picker.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+  }
+  picker.style.left = Math.min(rect.left, window.innerWidth - 310) + 'px';
+  picker.style.display = 'block';
+  _importCatPickerTarget = btn;
+  var srch = document.getElementById('importCatSearch');
+  if (srch) { srch.value = ''; srch.focus(); }
+  _buildImportCatList('');
+}
+function _buildImportCatList(q) {
+  var cats = loadCats().slice().sort(function(a,b){ return a.nome.localeCompare(b.nome,'pt-BR'); });
+  var list = document.getElementById('importCatList');
+  if (!list) return;
+  var lo = (q||'').toLowerCase();
+  var itemStyle = 'padding:7px 13px;font-size:0.78rem;color:var(--text2);cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px';
+  var html = '<div onclick="_selectImportCat(this)" data-val="" style="' + itemStyle + '">— Sem categoria —</div>';
+  cats.forEach(function(c) {
+    if (lo && c.nome.toLowerCase().indexOf(lo) === -1) return;
+    html += '<div onclick="_selectImportCat(this)" data-val="' + c.nome.replace(/"/g,'&quot;') + '" style="' + itemStyle + '">'
+      + (c.icone ? '<span>' + c.icone + '</span>' : '') + '<span>' + c.nome + '</span></div>';
+  });
+  list.innerHTML = html;
+}
+function _filterImportCatList() {
+  var srch = document.getElementById('importCatSearch');
+  _buildImportCatList(srch ? srch.value : '');
+}
+function _selectImportCat(item) {
+  var val = item.getAttribute('data-val') || '';
+  var btn = _importCatPickerTarget;
+  if (!btn) return;
+  var idx = btn.dataset.idx;
+  var allCats = loadCats();
+  var cat = allCats.find(function(c){ return c.nome === val; });
+  btn.textContent = val ? ((cat && cat.icone ? cat.icone + ' ' : '') + val) : '— Sem categoria —';
+  btn.dataset.cat = val;
+  var sel = document.querySelector('.import-cat-sel[data-idx="' + idx + '"]');
+  if (sel) { sel.value = val; onImportCatChange(sel); }
+  document.getElementById('importCatPicker').style.display = 'none';
+  _importCatPickerTarget = null;
+}
+document.addEventListener('click', function(e) {
+  var picker = document.getElementById('importCatPicker');
+  if (!picker || picker.style.display === 'none') return;
+  if (!picker.contains(e.target) && (!_importCatPickerTarget || !_importCatPickerTarget.contains(e.target))) {
+    picker.style.display = 'none';
+    _importCatPickerTarget = null;
+  }
+});
+
 function importToggleDups(checked) {
   document.querySelectorAll('#importTableDups .import-check').forEach(function(cb) { cb.checked = checked; });
   updateImportTotals();
@@ -3905,7 +3978,7 @@ function renderImportPreview(rows) {
     var tipoColor = r.xlsxTipo === 'receita' ? 'var(--green)' : isEstorno ? 'var(--green)' : 'var(--red)';
     var tipoSign  = r.xlsxTipo === 'receita' ? '+' : isEstorno ? '+' : '-';
     row += '<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:0.78rem;white-space:nowrap;border-right:1px solid var(--border)"><span style="color:' + tipoColor + '">' + tipoSign + fmtBR(r.value) + '</span></td>';
-    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><select class="import-cat-sel" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onchange="onImportCatChange(this)" style="' + selStyle + '"></select><span style="font-size:0.7rem;flex-shrink:0">' + catIcon + '</span></div></td>';
+    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-cat-btn" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onclick="_openImportCatPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">— Sem categoria —</span><select class="import-cat-sel" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onchange="onImportCatChange(this)" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + catIcon + '</span></div></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><select class="import-sub-sel" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" style="' + selStyle + '"></select><span style="font-size:0.7rem;flex-shrink:0">' + subIcon + '</span></div></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><select class="import-terc-sel" data-idx="' + i + '" style="' + selStyle + 'min-width:110px"></select></td>';
     var vencVal = r.xlsxVenc || '';
@@ -3967,10 +4040,8 @@ function renderImportPreview(rows) {
   });
 
   // Seção Duplicados
-  var dupSection = document.getElementById('imp-section-dups');
   var dupCount = _dups.length;
   var dupIaCount = rows.filter(function(r) { return r._iaDupSemantic; }).length;
-  if (dupSection) dupSection.style.display = (dupCount > 0 || dupIaCount > 0) ? 'block' : 'none';
   var dupCountEl = document.getElementById('imp-dup-count');
   var dupMsg = '';
   if (dupCount > 0) dupMsg += dupCount + ' duplicata' + (dupCount !== 1 ? 's' : '') + ' exata' + (dupCount !== 1 ? 's' : '') + ' (desmarcadas)';
@@ -3986,12 +4057,26 @@ function renderImportPreview(rows) {
 
   // Seção Não identificados
   var naoIdCount = rows.filter(function(r) { return _checkDup(r) === null && r.subCategoria === 'Não identificado'; }).length;
-  var naoIdSection = document.getElementById('imp-section-naoid');
   var naoIdCountEl = document.getElementById('imp-naoid-count');
-  if (naoIdSection) naoIdSection.style.display = naoIdCount > 0 ? 'block' : 'none';
   if (naoIdCountEl) naoIdCountEl.textContent = naoIdCount + ' lançamento' + (naoIdCount !== 1 ? 's' : '') + ' sem categoria identificada';
   var naoIdTable = document.getElementById('importTableNaoId');
   if (naoIdTable) naoIdTable.innerHTML = htmlNaoId;
+
+  // Abas: mostrar barra e atualizar badges
+  var tabBar = document.getElementById('imp-tab-bar');
+  if (tabBar) tabBar.style.display = 'flex';
+  var badgeNew = document.getElementById('imp-tab-badge-new');
+  var badgeDups = document.getElementById('imp-tab-badge-dups');
+  var badgeNaoid = document.getElementById('imp-tab-badge-naoid');
+  if (badgeNew) badgeNew.textContent = newCount;
+  if (badgeDups) badgeDups.textContent = dupCount + dupIaCount;
+  if (badgeNaoid) badgeNaoid.textContent = naoIdCount;
+  // Ocultar badges zero
+  if (badgeDups) badgeDups.style.display = (dupCount + dupIaCount) > 0 ? '' : 'none';
+  if (badgeNaoid) badgeNaoid.style.display = naoIdCount > 0 ? '' : 'none';
+  // Ativar aba: começa em "novos", mas se só tiver dups vai para dups
+  var defaultTab = newCount > 0 ? 'new' : (dupCount > 0 ? 'dups' : 'naoid');
+  switchImportTab(defaultTab);
 
   // Force-apply values via JS (innerHTML selected attribute is unreliable)
   document.querySelectorAll('.import-pgto').forEach(function(sel) {
@@ -4004,7 +4089,7 @@ function renderImportPreview(rows) {
 
   document.querySelectorAll('.import-cat-sel').forEach(function(sel) {
     var sugCatV = sel.getAttribute('data-cat') || '';
-    // Populate options
+    // Populate options (select oculto — usado para persistência)
     sel.innerHTML = '';
     var blankOpt = document.createElement('option');
     blankOpt.value = ''; blankOpt.textContent = '— Sem categoria —';
@@ -4023,6 +4108,18 @@ function renderImportPreview(rows) {
         for (var oi = 0; oi < sel.options.length; oi++) {
           if (sel.options[oi].value.toLowerCase() === vl) { sel.value = sel.options[oi].value; break; }
         }
+      }
+    }
+    // Sync button label with selected value
+    var idx = sel.dataset.idx;
+    var catBtn = document.querySelector('.import-cat-btn[data-idx="' + idx + '"]');
+    if (catBtn) {
+      var catVal = sel.value;
+      if (catVal) {
+        var catObj = allCats.find(function(c){ return c.nome === catVal; });
+        catBtn.textContent = (catObj && catObj.icone ? catObj.icone + ' ' : '') + catVal;
+      } else {
+        catBtn.textContent = '— Sem categoria —';
       }
     }
     // Now populate subs based on chosen cat
