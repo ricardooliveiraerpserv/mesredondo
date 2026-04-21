@@ -374,12 +374,23 @@ function importarBackup(event) {
           if (cr) noSupa = parseInt(cr.split('/')[1]) || 0;
         } catch(ce) { noSupa = -1; }
 
+        // Resumo de meses com dados
+        var contaMes = {};
+        lncsFinal.forEach(function(l) {
+          var k = (l.ano||'?') + '-' + String(l.mes||'?').padStart(2,'0');
+          contaMes[k] = (contaMes[k]||0) + 1;
+        });
+        var mesesComDados = Object.keys(contaMes).sort();
+        var primeiros = mesesComDados.slice(0, 3);
+        var ultimos   = mesesComDados.slice(-3);
+        var resumoMeses = (primeiros.length ? primeiros.join(', ') + (mesesComDados.length > 6 ? ' ... ' : ', ') : '')
+                        + (mesesComDados.length > 3 ? ultimos.join(', ') : '');
+
         var verificado = loadData();
         if (erros.length > 0) {
           alert('⚠️ Importação parcial!\n' + verificado.length + ' no cache | ' + noSupa + ' no Supabase.\n\nErros:\n' + erros.join('\n'));
         } else {
-          alert('✅ Importação concluída!\n' + verificado.length + ' no cache | ' + noSupa + ' no Supabase.' +
-                (acao === 'mesclar' ? '\n(Mesclado)' : ''));
+          alert('✅ Importação concluída!\n' + verificado.length + ' no cache | ' + noSupa + ' no Supabase.\n\nMeses com dados:\n' + resumoMeses + '\n(' + mesesComDados.length + ' meses no total)');
         }
         // Recarrega memCache do Supabase para garantir consistência
         if (noSupa > 0 && typeof window._loadAllData === 'function') {
