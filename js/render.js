@@ -3744,8 +3744,14 @@ function _openImportSubPicker(btn) {
   var srch = document.getElementById('importSubSearch');
   if (srch) { srch.value = ''; srch.focus(); }
   var idx = btn.dataset.idx;
-  var catSel = document.querySelector('.import-cat-sel[data-idx="' + idx + '"]');
-  var catNome = catSel ? catSel.value : '';
+  var catNome = '';
+  if (idx === '__bulk__') {
+    var bulkCatBtn = document.getElementById('imp-bulk-cat-btn');
+    catNome = bulkCatBtn ? (bulkCatBtn.dataset.cat || '') : '';
+  } else {
+    var catSel = document.querySelector('.import-cat-sel[data-idx="' + idx + '"]');
+    catNome = catSel ? catSel.value : '';
+  }
   _buildImportSubList('', catNome);
 }
 function _buildImportSubList(q, catNome) {
@@ -3769,8 +3775,14 @@ function _filterImportSubList() {
   var srch = document.getElementById('importSubSearch');
   var btn = _importSubPickerTarget;
   var idx = btn ? btn.dataset.idx : null;
-  var catSel = idx ? document.querySelector('.import-cat-sel[data-idx="' + idx + '"]') : null;
-  var catNome = catSel ? catSel.value : '';
+  var catNome = '';
+  if (idx === '__bulk__') {
+    var bulkCatBtn = document.getElementById('imp-bulk-cat-btn');
+    catNome = bulkCatBtn ? (bulkCatBtn.dataset.cat || '') : '';
+  } else {
+    var catSel = idx ? document.querySelector('.import-cat-sel[data-idx="' + idx + '"]') : null;
+    catNome = catSel ? catSel.value : '';
+  }
   _buildImportSubList(srch ? srch.value : '', catNome);
 }
 function _selectImportSub(item) {
@@ -3793,6 +3805,61 @@ document.addEventListener('click', function(e) {
     _importSubPickerTarget = null;
   }
 });
+
+function applyImportBulkCat() {
+  var bulkCatBtn = document.getElementById('imp-bulk-cat-btn');
+  var bulkSubBtn = document.getElementById('imp-bulk-sub-btn');
+  var catVal = bulkCatBtn ? (bulkCatBtn.dataset.cat || '') : '';
+  var subVal = bulkSubBtn ? (bulkSubBtn.dataset.sub || '') : '';
+  if (!catVal && !subVal) {
+    var info = document.getElementById('imp-bulk-info');
+    if (info) info.textContent = 'Selecione categoria ou sub-categoria antes.';
+    return;
+  }
+  var checked = document.querySelectorAll('.import-check:checked');
+  var count = 0;
+  checked.forEach(function(cb) {
+    var idx = cb.dataset.idx;
+    if (catVal) {
+      var catBtn = document.querySelector('.import-cat-btn[data-idx="' + idx + '"]');
+      var catSel = document.querySelector('.import-cat-sel[data-idx="' + idx + '"]');
+      if (catBtn && catSel) {
+        var allCats = loadCats();
+        var catObj = allCats.find(function(c){ return c.nome === catVal; });
+        catBtn.textContent = (catObj && catObj.icone ? catObj.icone + ' ' : '') + catVal;
+        catBtn.dataset.cat = catVal;
+        catSel.value = catVal;
+        onImportCatChange(catSel);
+      }
+    }
+    if (subVal) {
+      var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
+      var subSel = document.querySelector('.import-sub-sel[data-idx="' + idx + '"]');
+      if (subBtn && subSel) {
+        subSel.value = subVal;
+        if (!subSel.value) {
+          var svl = subVal.toLowerCase();
+          for (var si = 0; si < subSel.options.length; si++) {
+            if (subSel.options[si].value.toLowerCase() === svl) { subSel.value = subSel.options[si].value; break; }
+          }
+        }
+        subBtn.textContent = subSel.value || subVal;
+        subBtn.dataset.sub = subSel.value || subVal;
+      }
+    }
+    count++;
+  });
+  var info = document.getElementById('imp-bulk-info');
+  if (info) info.textContent = count + ' linha' + (count !== 1 ? 's' : '') + ' atualizad' + (count !== 1 ? 'as' : 'a') + '.';
+}
+function _clearBulkImportCat() {
+  var catBtn = document.getElementById('imp-bulk-cat-btn');
+  var subBtn = document.getElementById('imp-bulk-sub-btn');
+  if (catBtn) { catBtn.textContent = '— Categoria —'; catBtn.dataset.cat = ''; }
+  if (subBtn) { subBtn.textContent = '— Sub-cat —'; subBtn.dataset.sub = ''; }
+  var info = document.getElementById('imp-bulk-info');
+  if (info) info.textContent = '';
+}
 
 function importToggleDups(checked) {
   document.querySelectorAll('#importTableDups .import-check').forEach(function(cb) { cb.checked = checked; });
@@ -4144,6 +4211,8 @@ function renderImportPreview(rows) {
   // Abas: mostrar barra e atualizar badges
   var tabBar = document.getElementById('imp-tab-bar');
   if (tabBar) tabBar.style.display = 'flex';
+  var bulkBar = document.getElementById('imp-bulk-bar');
+  if (bulkBar) bulkBar.style.display = 'flex';
   var badgeNew = document.getElementById('imp-tab-badge-new');
   var badgeDups = document.getElementById('imp-tab-badge-dups');
   var badgeNaoid = document.getElementById('imp-tab-badge-naoid');

@@ -2450,8 +2450,18 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
         </div>
       </div>
 
+      <!-- Barra de ação em massa -->
+      <div id="imp-bulk-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px;background:var(--surface);position:sticky;top:0;z-index:11">
+        <span style="font-size:0.73rem;color:var(--muted);white-space:nowrap;font-weight:600">Em massa:</span>
+        <span id="imp-bulk-cat-btn" data-idx="__bulk__" data-cat="" onclick="_openImportCatPicker(this)" style="display:inline-block;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;white-space:nowrap;min-width:120px">— Categoria —</span>
+        <span id="imp-bulk-sub-btn" data-idx="__bulk__" data-sub="" onclick="_openImportSubPicker(this)" style="display:inline-block;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:0.75rem;cursor:pointer;white-space:nowrap;min-width:100px">— Sub-cat —</span>
+        <button onclick="applyImportBulkCat()" style="background:rgba(74,240,160,0.12);border:1px solid rgba(74,240,160,0.35);color:var(--accent);border-radius:6px;padding:4px 14px;font-size:0.75rem;font-weight:700;cursor:pointer;white-space:nowrap">Aplicar a marcados</button>
+        <button onclick="_clearBulkImportCat()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:0.73rem;cursor:pointer">Limpar</button>
+        <span id="imp-bulk-info" style="font-size:0.72rem;color:var(--muted)"></span>
+      </div>
+
       <!-- Abas: Novos / Duplicados / Não identificados -->
-      <div id="imp-tab-bar" style="display:none;gap:0;margin-bottom:12px;border-bottom:2px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10;padding-top:4px;">
+      <div id="imp-tab-bar" style="display:none;gap:0;margin-bottom:12px;border-bottom:2px solid var(--border);background:var(--surface);position:sticky;top:36px;z-index:10;padding-top:4px;">
         <button id="imp-tab-btn-new" onclick="switchImportTab('new')" style="background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text2);padding:8px 18px;font-size:0.82rem;cursor:pointer;font-family:var(--font);font-weight:600">✚ Novos <span id="imp-tab-badge-new" style="background:rgba(74,240,160,0.15);color:var(--accent);border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">0</span></button>
         <button id="imp-tab-btn-dups" onclick="switchImportTab('dups')" style="background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text2);padding:8px 18px;font-size:0.82rem;cursor:pointer;font-family:var(--font);font-weight:600">⚠️ Duplicados <span id="imp-tab-badge-dups" style="background:rgba(239,68,68,0.12);color:#ef4444;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">0</span></button>
         <button id="imp-tab-btn-naoid" onclick="switchImportTab('naoid')" style="background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text2);padding:8px 18px;font-size:0.82rem;cursor:pointer;font-family:var(--font);font-weight:600">❓ Não identificados <span id="imp-tab-badge-naoid" style="background:rgba(251,146,60,0.12);color:#fb923c;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">0</span></button>
@@ -3051,7 +3061,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202604212200"></script>
+<script src="js/render.js?v=202604212300"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
 <script src="js/areceber-apagar.js?v=202604052000"></script>
