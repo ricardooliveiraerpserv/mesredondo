@@ -1901,6 +1901,13 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
         <button onclick="limparDados()" style="width:100%;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:7px;padding:8px;font-size:0.82rem;font-weight:700;cursor:pointer">🗑 Limpar tudo</button>
       </div>
 
+      <!-- Diagnóstico temporário -->
+      <div class="panel" style="border-top:3px solid #f59e0b;padding:16px 18px">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:4px">🔬 Diagnóstico</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Testa o carregamento direto do Supabase.</div>
+        <button onclick="_diagLoad()" class="btn" style="width:100%;justify-content:center;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#f59e0b">🔬 Testar load</button>
+      </div>
+
     </div><!-- /grid usuario comum -->
 
     <div id="dados-admin-section" style="display:none">
@@ -3036,7 +3043,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 <script src="js/fsel.js?v=202604202245"></script>
 
 <!-- 6. Módulos auxiliares -->
-<script src="js/backup.js?v=202604210030"></script>
+<script src="js/backup.js?v=202604210040"></script>
 <script src="js/deploy.js?v=202604052000"></script>
 <script src="js/auto-update.js?v=202604052000"></script>
 <script src="js/debug.js?v=202604052000"></script>

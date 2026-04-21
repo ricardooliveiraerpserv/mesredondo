@@ -425,6 +425,44 @@ function importarBackup(event) {
   reader.readAsText(file);
 }
 
+// ======== DIAGNÓSTICO DE LOAD ========
+async function _diagLoad() {
+  var uid = window._currentUser && window._currentUser.id;
+  var token = window._cachedAccessToken;
+  var memLen = _memCache && _memCache.lancamentos ? _memCache.lancamentos.length : 0;
+
+  var msg = '🔬 DIAGNÓSTICO\n\n';
+  msg += 'UID: ' + (uid || 'NÃO ENCONTRADO') + '\n';
+  msg += 'Token: ' + (token ? token.slice(0,20) + '...' : 'NÃO ENCONTRADO') + '\n';
+  msg += 'memCache.lancamentos: ' + memLen + ' itens\n\n';
+
+  if (!uid || !token) { alert(msg + '❌ Sem autenticação — impossível carregar.'); return; }
+
+  try {
+    var res = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid + '&limit=5&select=id,mes,ano', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token }
+    });
+    msg += 'GET /mf_lancamentos → HTTP ' + res.status + '\n';
+    var data = await res.json();
+    msg += 'Retornou: ' + (Array.isArray(data) ? data.length : 'ERRO') + ' itens (limit 5)\n';
+    if (Array.isArray(data) && data.length > 0) {
+      msg += 'Primeiro: mes=' + data[0].mes + ' ano=' + data[0].ano + '\n';
+    }
+  } catch(e) {
+    msg += 'ERRO na requisição: ' + e.message + '\n';
+  }
+
+  try {
+    var res2 = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid + '&select=id', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token, 'Prefer': 'count=exact', 'Range': '0-0' }
+    });
+    var cr = res2.headers.get('content-range');
+    msg += 'Total no banco: ' + (cr ? cr.split('/')[1] : '?') + ' registros\n';
+  } catch(e) {}
+
+  alert(msg);
+}
+
 // ======== DIAGNÓSTICO ========
 function diagnostico() {
   var raw = _lsGet('financeos_lancamentos');
