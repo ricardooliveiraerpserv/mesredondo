@@ -50,33 +50,9 @@ function renderConfigTab() {
 }
 
 function diagnosticoModal() {
-  const raw = _lsGet('financeos_lancamentos');
-  if (!raw) { alert('localStorage VAZIO — nenhum dado salvo.'); return; }
-  let arr;
-  try { arr = JSON.parse(raw); } catch(e) { alert('ERRO ao parsear: ' + e.message); return; }
-  const lncs = arr.map ? arr.map(_unpack) : arr;
-  const contaMes = {};
-  lncs.forEach(l => {
-    const k = (l.ano||'?') + '-' + String(l.mes||'?').padStart(2,'0');
-    contaMes[k] = (contaMes[k]||0) + 1;
-  });
-  const mesesStr = Object.keys(contaMes).sort().map(k => `  ${k}: ${contaMes[k]} lançamentos`).join('\n');
-  const totalKB = (Object.keys(localStorage).reduce((s,k)=>s+(localStorage.getItem(k)||'').length,0)/1024).toFixed(1);
-  const msg = `DIAGNÓSTICO FINANCEOS
-━━━━━━━━━━━━━━━━━━━━━━━━
-Total lançamentos : ${lncs.length}
-Formato           : ${arr[0]?.i !== undefined ? 'compactado' : 'longo'}
-Provisões         : ${JSON.parse(_lsGet('financeos_provisoes')||'[]').length}
-Categorias        : ${loadCats().length}
-Terceiros         : ${loadTerceiros().length}
-Pagamentos        : ${loadPagamentos().length}
-Mês filtrado      : ${currentMonth}/${currentYear}
-Storage total     : ${totalKB} KB
-
-Lançamentos por mês:
-${mesesStr}`;
-  const el = document.getElementById('diagResult');
-  if (el) { el.style.display = 'block'; el.textContent = msg; el.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  // Redireciona para o novo diagnóstico Supabase
+  if (typeof _diagLoad === 'function') { _diagLoad(); return; }
+  alert('Função _diagLoad não encontrada.');
 }
 
 function limparDados() {
