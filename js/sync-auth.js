@@ -357,6 +357,7 @@ async function authLogout() {
 // ── _onLogin — executado após autenticação bem-sucedida ──
 async function _onLogin(user, sessionToken) {
   _currentUser = user;
+  window._currentUser = user; // garante acesso via window._currentUser para db.js
   window._cachedAccessToken = sessionToken || user.access_token || null;
 
   const meta = user.user_metadata || user.app_metadata || {};
@@ -998,6 +999,7 @@ async function perfilSavePassword() {
       await _onLogin(session.user, session.access_token);
     } else if (event === 'TOKEN_REFRESHED' && session && _currentUser) {
       _currentUser = session.user;
+      window._currentUser = session.user;
       window._cachedAccessToken = session.access_token;
     } else if (event === 'SIGNED_OUT') {
       _recoveryHandled = false;
