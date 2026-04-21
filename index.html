@@ -2592,6 +2592,11 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
   <input id="importCatSearch" type="text" placeholder="🔍 Buscar categoria..." autocomplete="off" oninput="_filterImportCatList()" style="width:100%;box-sizing:border-box;background:var(--surface);border:none;border-bottom:1px solid var(--border);color:var(--text);padding:8px 12px;font-size:0.78rem;font-family:var(--font);outline:none;border-radius:8px 8px 0 0">
   <div id="importCatList" style="max-height:220px;overflow-y:auto;padding:4px 0"></div>
 </div>
+<!-- Picker de sub-categoria flutuante -->
+<div id="importSubPicker" style="display:none;position:fixed;z-index:99999;background:var(--surface2);border:1px solid var(--border);border-radius:8px;min-width:200px;max-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
+  <input id="importSubSearch" type="text" placeholder="🔍 Buscar sub-categoria..." autocomplete="off" oninput="_filterImportSubList()" style="width:100%;box-sizing:border-box;background:var(--surface);border:none;border-bottom:1px solid var(--border);color:var(--text);padding:8px 12px;font-size:0.78rem;font-family:var(--font);outline:none;border-radius:8px 8px 0 0">
+  <div id="importSubList" style="max-height:220px;overflow-y:auto;padding:4px 0"></div>
+</div>
 
 <div class="modal-overlay" id="deployModalOverlay">
   <div class="modal" style="width:460px;max-width:95vw">
@@ -3046,7 +3051,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202604212100"></script>
+<script src="js/render.js?v=202604212200"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
 <script src="js/areceber-apagar.js?v=202604052000"></script>

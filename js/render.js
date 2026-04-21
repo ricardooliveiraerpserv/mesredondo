@@ -2770,6 +2770,12 @@ function onImportCatChange(catSel) {
   var r = importParsedRows[parseInt(idx)];
   var sugSub = r ? suggestSub(r.desc, catNome) : null;
   subSel.innerHTML = buildSubOpts(catNome, sugSub || '');
+  var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
+  if (subBtn) {
+    var newVal = subSel.value;
+    subBtn.textContent = newVal || '— Nenhuma —';
+    subBtn.dataset.sub = newVal;
+  }
 }
 
 // ── Modal open/close ──
@@ -3721,6 +3727,73 @@ document.addEventListener('click', function(e) {
   }
 });
 
+var _importSubPickerTarget = null;
+function _openImportSubPicker(btn) {
+  var picker = document.getElementById('importSubPicker');
+  if (!picker) return;
+  var rect = btn.getBoundingClientRect();
+  var spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < 260) {
+    picker.style.top = (rect.top - 260 + window.scrollY) + 'px';
+  } else {
+    picker.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+  }
+  picker.style.left = Math.min(rect.left, window.innerWidth - 290) + 'px';
+  picker.style.display = 'block';
+  _importSubPickerTarget = btn;
+  var srch = document.getElementById('importSubSearch');
+  if (srch) { srch.value = ''; srch.focus(); }
+  var idx = btn.dataset.idx;
+  var catSel = document.querySelector('.import-cat-sel[data-idx="' + idx + '"]');
+  var catNome = catSel ? catSel.value : '';
+  _buildImportSubList('', catNome);
+}
+function _buildImportSubList(q, catNome) {
+  var list = document.getElementById('importSubList');
+  if (!list) return;
+  var cats = loadCats();
+  var cat = null;
+  for (var i = 0; i < cats.length; i++) { if (cats[i].nome === catNome) { cat = cats[i]; break; } }
+  var subs = cat && cat.subs && cat.subs.length ? cat.subs.map(function(s) { return typeof s === 'string' ? s : s.nome; }).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }) : [];
+  var lo = (q||'').toLowerCase();
+  var itemStyle = 'padding:7px 13px;font-size:0.78rem;color:var(--text2);cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px';
+  var html = '<div onclick="_selectImportSub(this)" data-val="" style="' + itemStyle + '">— Nenhuma —</div>';
+  subs.forEach(function(sNome) {
+    if (lo && sNome.toLowerCase().indexOf(lo) === -1) return;
+    html += '<div onclick="_selectImportSub(this)" data-val="' + sNome.replace(/"/g,'&quot;') + '" style="' + itemStyle + '"><span>' + sNome + '</span></div>';
+  });
+  if (!subs.length && !q) html += '<div style="' + itemStyle + ';color:var(--muted)">Selecione uma categoria primeiro</div>';
+  list.innerHTML = html;
+}
+function _filterImportSubList() {
+  var srch = document.getElementById('importSubSearch');
+  var btn = _importSubPickerTarget;
+  var idx = btn ? btn.dataset.idx : null;
+  var catSel = idx ? document.querySelector('.import-cat-sel[data-idx="' + idx + '"]') : null;
+  var catNome = catSel ? catSel.value : '';
+  _buildImportSubList(srch ? srch.value : '', catNome);
+}
+function _selectImportSub(item) {
+  var val = item.getAttribute('data-val') || '';
+  var btn = _importSubPickerTarget;
+  if (!btn) return;
+  btn.textContent = val || '— Nenhuma —';
+  btn.dataset.sub = val;
+  var idx = btn.dataset.idx;
+  var sel = document.querySelector('.import-sub-sel[data-idx="' + idx + '"]');
+  if (sel) { sel.value = val; }
+  document.getElementById('importSubPicker').style.display = 'none';
+  _importSubPickerTarget = null;
+}
+document.addEventListener('click', function(e) {
+  var picker = document.getElementById('importSubPicker');
+  if (!picker || picker.style.display === 'none') return;
+  if (!picker.contains(e.target) && (!_importSubPickerTarget || !_importSubPickerTarget.contains(e.target))) {
+    picker.style.display = 'none';
+    _importSubPickerTarget = null;
+  }
+});
+
 function importToggleDups(checked) {
   document.querySelectorAll('#importTableDups .import-check').forEach(function(cb) { cb.checked = checked; });
   updateImportTotals();
@@ -3985,7 +4058,7 @@ function renderImportPreview(rows) {
     var tipoSign  = r.xlsxTipo === 'receita' ? '+' : isEstorno ? '+' : '-';
     row += '<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:0.78rem;white-space:nowrap;border-right:1px solid var(--border)"><span style="color:' + tipoColor + '">' + tipoSign + fmtBR(r.value) + '</span></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-cat-btn" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onclick="_openImportCatPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">— Sem categoria —</span><select class="import-cat-sel" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onchange="onImportCatChange(this)" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + catIcon + '</span></div></td>';
-    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><select class="import-sub-sel" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" style="' + selStyle + 'min-width:110px"></select><span style="font-size:0.7rem;flex-shrink:0">' + subIcon + '</span></div></td>';
+    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-sub-btn" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" onclick="_openImportSubPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">— Nenhuma —</span><select class="import-sub-sel" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + subIcon + '</span></div></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><select class="import-terc-sel" data-idx="' + i + '" style="' + selStyle + 'min-width:110px"></select></td>';
     var vencVal = r.xlsxVenc || '';
     // Converte DD/MM/AAAA para AAAA-MM-DD para o input type=date
@@ -4159,6 +4232,13 @@ function renderImportPreview(rows) {
             if (subSel.options[si].value.toLowerCase() === svl) { subSel.value = subSel.options[si].value; break; }
           }
         }
+      }
+      // Sync sub button label
+      var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
+      if (subBtn) {
+        var subVal = subSel.value;
+        subBtn.textContent = subVal || '— Nenhuma —';
+        subBtn.dataset.sub = subVal;
       }
     }
   });
