@@ -432,7 +432,7 @@ async function _diagLoad() {
   var memLen = _memCache && _memCache.lancamentos ? _memCache.lancamentos.length : 0;
 
   var msg = '🔬 DIAGNÓSTICO\n\n';
-  msg += 'UID: ' + (uid ? uid.slice(0,8)+'...' : 'NÃO ENCONTRADO') + '\n';
+  msg += 'UID: ' + (uid || 'NÃO ENCONTRADO') + '\n';
   msg += 'Token: ' + (token ? token.slice(0,20) + '...' : 'NÃO ENCONTRADO') + '\n';
   msg += 'memCache: ' + memLen + ' itens\n\n';
 
