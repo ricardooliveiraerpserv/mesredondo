@@ -316,33 +316,48 @@ function importarBackup(event) {
         lncsFinal = lncs;
       }
 
-      saveData(lncsFinal);
-
-      // ── Restaura outros dados do backup (se existirem) ──────────────────
-      if (backup.provisoes && typeof saveProvisoes === 'function')
-        saveProvisoes(backup.provisoes);
-      if (backup.categorias && backup.categorias.length && typeof saveCats === 'function')
-        saveCats(backup.categorias);
-      if (backup.pagamentos && backup.pagamentos.length && typeof savePagamentos === 'function')
-        savePagamentos(backup.pagamentos);
-      if (backup.terceiros && backup.terceiros.length && typeof saveTerceiros === 'function')
-        saveTerceiros(backup.terceiros);
-      if (backup.bancos && backup.bancos.length && typeof saveBancos === 'function')
-        saveBancos(backup.bancos);
-      if (backup.bancoModo && typeof saveBancoModo === 'function')
-        saveBancoModo(backup.bancoModo);
-      if (backup.saldoInicial && typeof saveSaldoInicial === 'function')
-        saveSaldoInicial(backup.saldoInicial);
-      if (backup.catmap && typeof saveCatMap === 'function')
-        saveCatMap(backup.catmap);
-      if (backup.submap && typeof saveSubMap === 'function')
-        saveSubMap(backup.submap);
-
+      // Atualiza memCache imediatamente para a UI responder
+      _memCache.lancamentos = lncsFinal;
       renderAll();
-      var verificado = loadData();
-      console.log('[FinanceOS] Verificação pós-import:', verificado.length, 'lançamentos no loadData()');
-      alert('✅ Importação concluída!\n' + verificado.length + ' lançamentos carregados.' +
-            (acao === 'mesclar' ? '\n(Mesclado com dados existentes)' : ''));
+
+      // ── Salva no Supabase aguardando conclusão ──────────────────────────
+      (async function() {
+        var erros = [];
+        try {
+          await dbSaveLancamentos(lncsFinal);
+        } catch(e) {
+          erros.push('Lançamentos: ' + e.message);
+          console.error('[import] dbSaveLancamentos ERRO:', e);
+        }
+
+        // Restaura outros dados do backup
+        var extras = [
+          { cond: backup.provisoes,                          fn: saveProvisoes,   arg: backup.provisoes,   nome: 'Provisões' },
+          { cond: backup.categorias && backup.categorias.length, fn: saveCats,   arg: backup.categorias,  nome: 'Categorias' },
+          { cond: backup.pagamentos && backup.pagamentos.length, fn: savePagamentos, arg: backup.pagamentos, nome: 'Pagamentos' },
+          { cond: backup.terceiros  && backup.terceiros.length,  fn: saveTerceiros,  arg: backup.terceiros,  nome: 'Terceiros' },
+          { cond: backup.bancos     && backup.bancos.length,     fn: saveBancos,     arg: backup.bancos,     nome: 'Bancos' },
+          { cond: backup.bancoModo,  fn: saveBancoModo,  arg: backup.bancoModo,  nome: 'BancoModo' },
+          { cond: backup.saldoInicial, fn: saveSaldoInicial, arg: backup.saldoInicial, nome: 'SaldoInicial' },
+          { cond: backup.catmap,     fn: saveCatMap,     arg: backup.catmap,     nome: 'CatMap' },
+          { cond: backup.submap,     fn: saveSubMap,     arg: backup.submap,     nome: 'SubMap' },
+        ];
+        for (var x = 0; x < extras.length; x++) {
+          var ex = extras[x];
+          if (ex.cond && typeof ex.fn === 'function') {
+            try { await Promise.resolve(ex.fn(ex.arg)); }
+            catch(e) { erros.push(ex.nome + ': ' + e.message); }
+          }
+        }
+
+        var verificado = loadData();
+        if (erros.length > 0) {
+          alert('⚠️ Importação parcial!\n' + verificado.length + ' lançamentos no cache.\n\nErros ao salvar no Supabase:\n' + erros.join('\n'));
+        } else {
+          alert('✅ Importação concluída!\n' + verificado.length + ' lançamentos salvos no Supabase.' +
+                (acao === 'mesclar' ? '\n(Mesclado com dados existentes)' : ''));
+        }
+      })();
 
     } catch(err) {
       console.error('[FinanceOS] Erro no import:', err);
