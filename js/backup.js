@@ -323,11 +323,19 @@ function importarBackup(event) {
       // ── Salva no Supabase aguardando conclusão ──────────────────────────
       (async function() {
         var erros = [];
+        // Salva lançamentos diretamente (dbSaveLancamentos engole erros internamente)
         try {
-          await dbSaveLancamentos(lncsFinal);
+          var uid = window._currentUser && window._currentUser.id;
+          if (!uid) throw new Error('Usuário não autenticado — recarregue a página e tente novamente.');
+          var rows = lncsFinal.map(function(l) { return _lancToDbRow(l, uid); });
+          var BATCH = 200;
+          for (var bi = 0; bi < rows.length; bi += BATCH) {
+            await _dbFetch('mf_lancamentos', 'POST', rows.slice(bi, bi + BATCH));
+          }
+          console.log('[import] ' + lncsFinal.length + ' lançamentos salvos no Supabase');
         } catch(e) {
           erros.push('Lançamentos: ' + e.message);
-          console.error('[import] dbSaveLancamentos ERRO:', e);
+          console.error('[import] ERRO ao salvar lançamentos:', e);
         }
 
         // Restaura outros dados do backup
