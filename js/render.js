@@ -3894,9 +3894,9 @@ function sortImport(col) {
     _importSortCol = col;
     _importSortAsc = true;
   }
-  // Update header icons in both tables
+  // Update header icons in all three tables
   var cols = ['date','desc','pgto','tipo','parc','valor','cat','sub','terc','venc','pago'];
-  ['dup','new'].forEach(function(tbl) {
+  ['dup','new','naoid'].forEach(function(tbl) {
     cols.forEach(function(c) {
       var el = document.getElementById('imp-si-' + c + '-' + tbl);
       if (!el) return;

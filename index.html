@@ -2565,24 +2565,31 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
           <span style="font-size:0.72rem;color:var(--muted)">Categoria: Gastos Variáveis / Não identificado — ajuste manualmente se quiser</span>
         </div>
         <div style="overflow-x:auto;border:1px solid rgba(251,146,60,0.2);border-top:none;border-radius:0 0 8px 8px">
-          <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
-            <thead>
-              <tr style="background:rgba(251,146,60,0.06);border-bottom:1px solid var(--border)">
-                <th style="padding:6px 4px;text-align:center;border-right:1px solid var(--border);width:32px"><input type="checkbox" onchange="document.querySelectorAll('#importTableNaoId .import-check').forEach(function(cb){cb.checked=this.checked},this)" style="cursor:pointer"></th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border);white-space:nowrap">Data</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border)">Descrição</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border);white-space:nowrap">Pagamento</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border);white-space:nowrap">Tipo</th>
-                <th style="padding:6px 8px;text-align:center;border-right:1px solid var(--border);white-space:nowrap">Parcela</th>
-                <th style="padding:6px 8px;text-align:right;border-right:1px solid var(--border);white-space:nowrap">Valor</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border)">Categoria</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border)">Sub</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border)">Terceiro</th>
-                <th style="padding:6px 8px;text-align:left;border-right:1px solid var(--border);white-space:nowrap">Vencimento</th>
-                <th style="padding:6px 8px;text-align:center;border-right:1px solid var(--border);white-space:nowrap">Pago</th>
-                <th style="padding:6px 8px;text-align:left;white-space:nowrap">Futuras</th>
-              </tr>
-            </thead>
+          <table style="width:100%;min-width:1200px;font-size:0.78rem;border-collapse:collapse;table-layout:auto;">
+          <colgroup>
+            <col style="width:34px"><col style="width:82px"><col style="width:170px">
+            <col style="width:120px"><col style="width:110px"><col style="width:58px">
+            <col style="width:78px"><col style="width:155px"><col style="width:140px">
+            <col style="width:120px"><col style="width:100px"><col style="width:46px">
+            <col style="width:68px">
+          </colgroup>
+          <thead style="position:sticky;top:0;background:rgba(251,146,60,0.1);z-index:2;">
+            <tr style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text2);border-bottom:1px solid var(--border)">
+              <th style="padding:8px 4px;border-right:1px solid var(--border)"><input type="checkbox" onchange="document.querySelectorAll('#importTableNaoId .import-check').forEach(function(cb){cb.checked=this.checked},this)" style="cursor:pointer"></th>
+              <th onclick="sortImport('date')" style="padding:8px 6px;text-align:left;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Data <span id="imp-si-date-naoid">⇅</span></th>
+              <th onclick="sortImport('desc')" style="padding:8px 6px;text-align:left;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Descrição <span id="imp-si-desc-naoid">⇅</span></th>
+              <th onclick="sortImport('pgto')" style="padding:8px 6px;text-align:left;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Pagamento <span id="imp-si-pgto-naoid">⇅</span></th>
+              <th onclick="sortImport('tipo')" style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Tipo / Meses <span id="imp-si-tipo-naoid">⇅</span></th>
+              <th onclick="sortImport('parc')" style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Parcela <span id="imp-si-parc-naoid">⇅</span></th>
+              <th onclick="sortImport('valor')" style="padding:8px 6px;text-align:right;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Valor <span id="imp-si-valor-naoid">⇅</span></th>
+              <th onclick="sortImport('cat')" style="padding:8px 6px;text-align:left;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Categoria 💡</th>
+              <th onclick="sortImport('sub')" style="padding:8px 6px;text-align:left;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Sub-cat 💡</th>
+              <th onclick="sortImport('terc')" style="padding:8px 6px;text-align:left;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Terceiro</th>
+              <th onclick="sortImport('venc')" style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Vencimento</th>
+              <th onclick="sortImport('pago')" style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap">Pago? <span id="imp-si-pago-naoid">⇅</span></th>
+              <th style="padding:8px 6px;text-align:center;">Lançar até</th>
+            </tr>
+          </thead>
             <tbody id="importTableNaoId"></tbody>
           </table>
         </div>
@@ -3061,7 +3068,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202604212300"></script>
+<script src="js/render.js?v=202604212330"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
 <script src="js/areceber-apagar.js?v=202604052000"></script>
