@@ -3934,7 +3934,8 @@ function renderImportPreview(rows) {
   if (!rows.length) { alert('Nenhum lançamento encontrado no arquivo.'); return; }
 
   // ── Detecção de duplicatas ──────────────────────────────────────────────────
-  var _allExist = loadData();
+  // loadData() é async — lê direto do cache síncrono para evitar receber Promise
+  var _allExist = (typeof _memCache !== 'undefined' && _memCache.lancamentos) ? _memCache.lancamentos : [];
 
   var _norm = function(s) {
     return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
