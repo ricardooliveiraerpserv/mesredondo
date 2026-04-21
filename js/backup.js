@@ -358,12 +358,33 @@ function importarBackup(event) {
           }
         }
 
+        // Verifica quantos registros chegaram ao Supabase de fato
+        var noSupa = 0;
+        try {
+          var uid2 = window._currentUser && window._currentUser.id;
+          var countRes = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid2 + '&select=id', {
+            headers: {
+              'apikey': SB_KEY,
+              'Authorization': 'Bearer ' + (window._cachedAccessToken || ''),
+              'Prefer': 'count=exact',
+              'Range': '0-0'
+            }
+          });
+          var cr = countRes.headers.get('content-range');
+          if (cr) noSupa = parseInt(cr.split('/')[1]) || 0;
+        } catch(ce) { noSupa = -1; }
+
         var verificado = loadData();
         if (erros.length > 0) {
-          alert('⚠️ Importação parcial!\n' + verificado.length + ' lançamentos no cache.\n\nErros ao salvar no Supabase:\n' + erros.join('\n'));
+          alert('⚠️ Importação parcial!\n' + verificado.length + ' no cache | ' + noSupa + ' no Supabase.\n\nErros:\n' + erros.join('\n'));
         } else {
-          alert('✅ Importação concluída!\n' + verificado.length + ' lançamentos salvos no Supabase.' +
-                (acao === 'mesclar' ? '\n(Mesclado com dados existentes)' : ''));
+          alert('✅ Importação concluída!\n' + verificado.length + ' no cache | ' + noSupa + ' no Supabase.' +
+                (acao === 'mesclar' ? '\n(Mesclado)' : ''));
+        }
+        // Recarrega memCache do Supabase para garantir consistência
+        if (noSupa > 0 && typeof window._loadAllData === 'function') {
+          await window._loadAllData();
+          renderAll();
         }
       })();
 
