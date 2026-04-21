@@ -3495,6 +3495,7 @@ function _buildImportFSEL() {
   // ── Categoria — todas as cadastradas + as da importação ──
   var cats = [];
   cats.push({ value: '', text: 'Todas categorias' });
+  cats.push({ value: '__sem_cat__', text: '— Sem categoria —' });
   var catSet = new Set();
   if (typeof loadCats === 'function') {
     loadCats().forEach(function(c) { if (c && c.nome) catSet.add(c.nome); });
@@ -3601,7 +3602,12 @@ function applyImportFilters() {
     if (cats.length) {
       if (cats[0] === '__nenhum__') return false;
       var rCat = r.categoria || r.xlsxCat || '';
-      if (!cats.includes(rCat)) return false;
+      var wantSemCat = cats.includes('__sem_cat__');
+      var otherCats = cats.filter(function(c){ return c !== '__sem_cat__'; });
+      if (wantSemCat && !rCat) return true;
+      if (otherCats.length && otherCats.includes(rCat)) return true;
+      if (wantSemCat && !otherCats.length && rCat) return false;
+      if (!wantSemCat && !otherCats.includes(rCat)) return false;
     }
     if (subs.length) {
       if (subs[0] === '__nenhum__') return false;
