@@ -395,7 +395,24 @@ function importarBackup(event) {
         // Recarrega memCache do Supabase para garantir consistência
         if (noSupa > 0 && typeof window._loadAllData === 'function') {
           await window._loadAllData();
+          // Navega para o mês mais recente com dados
+          if (mesesComDados.length > 0) {
+            var ultimoMes = mesesComDados[mesesComDados.length - 1]; // ex: "2025-12"
+            var partes = ultimoMes.split('-');
+            var novoAno = parseInt(partes[0]);
+            var novoMes = parseInt(partes[1]);
+            if (novoAno && novoMes) {
+              currentMonth = novoMes;
+              currentYear  = novoAno;
+              window._rangeFilter = { de: { mes: novoMes, ano: novoAno }, ate: { mes: novoMes, ano: novoAno } };
+              // Atualiza selects de navegação
+              ['filterMonthDe','filterMonthAte'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = novoMes; });
+              ['filterYearDe','filterYearAte'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = novoAno; });
+              if (typeof updatePeriodoLabel === 'function') updatePeriodoLabel();
+            }
+          }
           renderAll();
+          try { renderTerceirosTab(); renderParceladosTab(); renderVencimentosTab(); renderCartoesTab(); } catch(e) {}
         }
       })();
 
