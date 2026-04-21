@@ -4038,7 +4038,7 @@ function renderImportPreview(rows) {
     var rowHtml = _buildImportRow(r, (r._origIdx !== undefined ? r._origIdx : i));
     if (_checkDup(r) !== null) {
       htmlDup += rowHtml;
-    } else if (!(r.categoria || r.xlsxCat)) {
+    } else if (!(r.categoria || r.xlsxCat || suggestCat(r.desc))) {
       htmlNaoId += rowHtml;
     } else {
       htmlNew += rowHtml;
@@ -4056,13 +4056,13 @@ function renderImportPreview(rows) {
   document.getElementById('importTableDups').innerHTML = htmlDup;
 
   // Seção Novos
-  var newCount = rows.filter(function(r) { return _checkDup(r) === null && (r.categoria || r.xlsxCat); }).length;
+  var newCount = rows.filter(function(r) { return _checkDup(r) === null && (r.categoria || r.xlsxCat || suggestCat(r.desc)); }).length;
   var newCountEl = document.getElementById('imp-new-count');
   if (newCountEl) newCountEl.textContent = newCount + ' lançamento' + (newCount !== 1 ? 's' : '');
   document.getElementById('importTableNew').innerHTML = htmlNew;
 
   // Seção Não identificados
-  var naoIdCount = rows.filter(function(r) { return _checkDup(r) === null && !(r.categoria || r.xlsxCat); }).length;
+  var naoIdCount = rows.filter(function(r) { return _checkDup(r) === null && !(r.categoria || r.xlsxCat || suggestCat(r.desc)); }).length;
   var naoIdCountEl = document.getElementById('imp-naoid-count');
   if (naoIdCountEl) naoIdCountEl.textContent = naoIdCount + ' lançamento' + (naoIdCount !== 1 ? 's' : '') + ' sem categoria identificada';
   var naoIdTable = document.getElementById('importTableNaoId');
