@@ -320,25 +320,24 @@ function importarBackup(event) {
       saveData(lncsFinal);
 
       // ── Restaura outros dados do backup (se existirem) ──────────────────
-      if (backup.provisoes) _lsSet('financeos_provisoes', JSON.stringify(backup.provisoes));
-      if (backup.categorias && backup.categorias.length)
-        _lsSet('financeos_categorias', JSON.stringify(backup.categorias));
-      if (backup.pagamentos && backup.pagamentos.length)
-        _lsSet('financeos_pagamentos', JSON.stringify(backup.pagamentos));
-      if (backup.terceiros && backup.terceiros.length)
-        _lsSet('financeos_terceiros', JSON.stringify(backup.terceiros));
-      if (backup.bancos && backup.bancos.length)
-        _lsSet('financeos_bancos', JSON.stringify(backup.bancos));
-      if (backup.bancoModo)
-        _lsSet('financeos_banco_modo', backup.bancoModo);
-      if (backup.catsVersion)
-        _lsSet('financeos_cats_version', backup.catsVersion);
-      if (backup.saldoInicial)
-        _lsSet('financeos_saldo_inicial', JSON.stringify(backup.saldoInicial));
-      if (backup.catmap)
-        _lsSet('fos_catmap', JSON.stringify(backup.catmap));
-      if (backup.submap)
-        _lsSet('fos_submap', JSON.stringify(backup.submap));
+      if (backup.provisoes && typeof saveProvisoes === 'function')
+        saveProvisoes(backup.provisoes);
+      if (backup.categorias && backup.categorias.length && typeof saveCats === 'function')
+        saveCats(backup.categorias);
+      if (backup.pagamentos && backup.pagamentos.length && typeof savePagamentos === 'function')
+        savePagamentos(backup.pagamentos);
+      if (backup.terceiros && backup.terceiros.length && typeof saveTerceiros === 'function')
+        saveTerceiros(backup.terceiros);
+      if (backup.bancos && backup.bancos.length && typeof saveBancos === 'function')
+        saveBancos(backup.bancos);
+      if (backup.bancoModo && typeof saveBancoModo === 'function')
+        saveBancoModo(backup.bancoModo);
+      if (backup.saldoInicial && typeof saveSaldoInicial === 'function')
+        saveSaldoInicial(backup.saldoInicial);
+      if (backup.catmap && typeof saveCatMap === 'function')
+        saveCatMap(backup.catmap);
+      if (backup.submap && typeof saveSubMap === 'function')
+        saveSubMap(backup.submap);
 
       renderAll();
       var verificado = loadData();
