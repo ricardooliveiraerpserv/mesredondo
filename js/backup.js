@@ -167,25 +167,24 @@ function _crc32(buf){
 
 function exportarBackup() {
   // Exporta sempre no formato longo (chaves completas) para máxima compatibilidade
-  const lncsRaw = JSON.parse(_lsGet('financeos_lancamentos', '[]'));
+  const lncsRaw = (typeof loadData === 'function') ? loadData() : [];
   const lncs = lncsRaw.length && (lncsRaw[0].i !== undefined || lncsRaw[0].t !== undefined)
-    ? lncsRaw.map(_unpack)   // estava compactado → descompacta para exportar legível
-    : lncsRaw;               // já estava no formato longo
+    ? lncsRaw.map(_unpack)
+    : lncsRaw;
 
   const backup = {
     version: 2,
     exportedAt: new Date().toISOString(),
     lancamentos:  lncs,
-    provisoes:    JSON.parse(_lsGet('financeos_provisoes', '[]')),
-    categorias:   JSON.parse(_lsGet('financeos_categorias', '[]')),
-    pagamentos:   JSON.parse(_lsGet('financeos_pagamentos', '[]')),
-    terceiros:    JSON.parse(_lsGet('financeos_terceiros', '[]')),
-    bancos:       JSON.parse(_lsGet('financeos_bancos', '[]')),
-    bancoModo:    _lsGet('financeos_banco_modo', 'consolidado'),
-    catsVersion:  _lsGet('financeos_cats_version') || '',
-    saldoInicial: JSON.parse(_lsGet('financeos_saldo_inicial', 'null')),
-    catmap:       JSON.parse(_lsGet('fos_catmap', '{}')),
-    submap:       JSON.parse(_lsGet('fos_submap', '{}')),
+    provisoes:    (typeof loadProvisoes === 'function') ? loadProvisoes() : [],
+    categorias:   (typeof loadCats === 'function') ? loadCats() : [],
+    pagamentos:   (typeof loadPagamentos === 'function') ? loadPagamentos() : [],
+    terceiros:    (typeof loadTerceiros === 'function') ? loadTerceiros() : [],
+    bancos:       (typeof loadBancos === 'function') ? loadBancos() : [],
+    bancoModo:    (typeof loadBancoModo === 'function') ? loadBancoModo() : 'consolidado',
+    saldoInicial: (typeof loadSaldoInicial === 'function') ? loadSaldoInicial() : null,
+    catmap:       (typeof loadCatMap === 'function') ? loadCatMap() : {},
+    submap:       (typeof loadSubMap === 'function') ? loadSubMap() : {},
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
