@@ -3729,16 +3729,8 @@ function _moveImportRowToNew(idx) {
 function _checkAndMigrateToNew(idx) {
   var catBtn = document.querySelector('.import-cat-btn[data-idx="' + idx + '"]');
   var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
-  if (!catBtn) return;
-  var catVal = catBtn.dataset.cat || '';
-  if (!catVal) return;
-  var subVal = subBtn ? (subBtn.dataset.sub || '') : '';
-  // Move se sub preenchida OU se categoria não tem sub-categorias
-  if (subVal) { _moveImportRowToNew(idx); return; }
-  var cats = loadCats();
-  var cat = cats.find(function(c){ return c.nome === catVal; });
-  var hasSubs = cat && cat.subs && cat.subs.length > 0;
-  if (!hasSubs) _moveImportRowToNew(idx);
+  if (!catBtn || !subBtn) return;
+  if ((catBtn.dataset.cat || '') && (subBtn.dataset.sub || '')) _moveImportRowToNew(idx);
 }
 
 function _selectImportCat(item) {
