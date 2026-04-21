@@ -2311,37 +2311,6 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       <input type="file" id="importFileInput" accept=".xls,.xlsx" style="display:none" onchange="handleImportFile(this.files[0])">
     </div>
 
-    <!-- Config -->
-    <div class="form-row" style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;min-width:120px;">
-        <label style="font-size:0.75rem;color:var(--text2);display:block;margin-bottom:4px;">Tipo</label>
-        <select id="importDefaultTipo" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:0.85rem;">
-          <option value="despesa">↓ Despesa</option>
-          <option value="receita">↑ Receita</option>
-        </select>
-      </div>
-      <div style="flex:2;min-width:160px;">
-        <label style="font-size:0.75rem;color:var(--text2);display:block;margin-bottom:4px;">Categoria padrão</label>
-        <select id="importDefaultCat" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:0.85rem;">
-          <option value="">— Sem categoria —</option>
-        </select>
-      </div>
-      <div style="flex:1;min-width:120px;">
-        <label style="font-size:0.75rem;color:var(--text2);display:block;margin-bottom:4px;">Status padrão</label>
-        <select id="importDefaultStatus" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:0.85rem;">
-          <option value="pendente">Pendente</option>
-          <option value="pago">Pago</option>
-        </select>
-      </div>
-      <div style="flex:1;min-width:130px;">
-        <label style="font-size:0.75rem;color:var(--text2);display:block;margin-bottom:4px;">Parcelas futuras como</label>
-        <select id="importFutureStatus" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:0.85rem;">
-          <option value="pendente">Pendente</option>
-          <option value="pago">Pago</option>
-        </select>
-      </div>
-    </div>
-
     <!-- Preview table -->
     <div id="importPreview" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -3068,7 +3037,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202604220030"></script>
+<script src="js/render.js?v=202604220100"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
 <script src="js/areceber-apagar.js?v=202604052000"></script>

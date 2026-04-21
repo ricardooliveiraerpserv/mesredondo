@@ -3726,6 +3726,20 @@ function _moveImportRowToNew(idx) {
   var newTbody = document.getElementById('importTableNew');
   if (newTbody) { newTbody.appendChild(tr); _updateImportTabCounts(); }
 }
+function _checkAndMigrateToNew(idx) {
+  var catBtn = document.querySelector('.import-cat-btn[data-idx="' + idx + '"]');
+  var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
+  if (!catBtn) return;
+  var catVal = catBtn.dataset.cat || '';
+  if (!catVal) return;
+  var subVal = subBtn ? (subBtn.dataset.sub || '') : '';
+  // Move se sub preenchida OU se categoria não tem sub-categorias
+  if (subVal) { _moveImportRowToNew(idx); return; }
+  var cats = loadCats();
+  var cat = cats.find(function(c){ return c.nome === catVal; });
+  var hasSubs = cat && cat.subs && cat.subs.length > 0;
+  if (!hasSubs) _moveImportRowToNew(idx);
+}
 
 function _selectImportCat(item) {
   var val = item.getAttribute('data-val') || '';
@@ -3740,11 +3754,11 @@ function _selectImportCat(item) {
   if (sel) { sel.value = val; onImportCatChange(sel); }
   document.getElementById('importCatPicker').style.display = 'none';
   _importCatPickerTarget = null;
-  // Sync para importParsedRows e migra linha se estava em Não identificados
-  if (idx !== '__bulk__' && val) {
+  // Sync para importParsedRows e verifica migração
+  if (idx !== '__bulk__') {
     var r = importParsedRows[parseInt(idx)];
     if (r) r.xlsxCat = val;
-    _moveImportRowToNew(idx);
+    if (val) _checkAndMigrateToNew(idx);
   }
 }
 document.addEventListener('click', function(e) {
@@ -3825,6 +3839,8 @@ function _selectImportSub(item) {
   if (sel) { sel.value = val; }
   document.getElementById('importSubPicker').style.display = 'none';
   _importSubPickerTarget = null;
+  // Verifica migração ao preencher sub
+  if (idx !== '__bulk__' && val) _checkAndMigrateToNew(idx);
 }
 document.addEventListener('click', function(e) {
   var picker = document.getElementById('importSubPicker');
@@ -3861,7 +3877,7 @@ function applyImportBulkCat() {
         onImportCatChange(catSel);
         var r = importParsedRows[parseInt(idx)];
         if (r) r.xlsxCat = catVal;
-        _moveImportRowToNew(idx);
+        _checkAndMigrateToNew(idx);
       }
     }
     if (subVal) {
