@@ -3704,6 +3704,29 @@ function _filterImportCatList() {
   var srch = document.getElementById('importCatSearch');
   _buildImportCatList(srch ? srch.value : '');
 }
+function _updateImportTabCounts() {
+  var newCount  = document.querySelectorAll('#importTableNew tr').length;
+  var naoidCount = document.querySelectorAll('#importTableNaoId tr').length;
+  var badgeNew   = document.getElementById('imp-tab-badge-new');
+  var badgeNaoid = document.getElementById('imp-tab-badge-naoid');
+  if (badgeNew)   badgeNew.textContent = newCount;
+  if (badgeNaoid) { badgeNaoid.textContent = naoidCount; badgeNaoid.style.display = naoidCount > 0 ? '' : 'none'; }
+  var newCountEl   = document.getElementById('imp-new-count');
+  var naoidCountEl = document.getElementById('imp-naoid-count');
+  if (newCountEl)   newCountEl.textContent   = newCount   + ' lançamento' + (newCount   !== 1 ? 's' : '');
+  if (naoidCountEl) naoidCountEl.textContent = naoidCount + ' lançamento' + (naoidCount !== 1 ? 's' : '') + ' sem categoria identificada';
+}
+function _moveImportRowToNew(idx) {
+  var chk = document.querySelector('.import-check[data-idx="' + idx + '"]');
+  if (!chk) return;
+  var tr = chk.closest('tr');
+  if (!tr) return;
+  var naoidTbody = document.getElementById('importTableNaoId');
+  if (!naoidTbody || !naoidTbody.contains(tr)) return;
+  var newTbody = document.getElementById('importTableNew');
+  if (newTbody) { newTbody.appendChild(tr); _updateImportTabCounts(); }
+}
+
 function _selectImportCat(item) {
   var val = item.getAttribute('data-val') || '';
   var btn = _importCatPickerTarget;
@@ -3717,6 +3740,12 @@ function _selectImportCat(item) {
   if (sel) { sel.value = val; onImportCatChange(sel); }
   document.getElementById('importCatPicker').style.display = 'none';
   _importCatPickerTarget = null;
+  // Sync para importParsedRows e migra linha se estava em Não identificados
+  if (idx !== '__bulk__' && val) {
+    var r = importParsedRows[parseInt(idx)];
+    if (r) r.xlsxCat = val;
+    _moveImportRowToNew(idx);
+  }
 }
 document.addEventListener('click', function(e) {
   var picker = document.getElementById('importCatPicker');
@@ -3830,6 +3859,9 @@ function applyImportBulkCat() {
         catBtn.dataset.cat = catVal;
         catSel.value = catVal;
         onImportCatChange(catSel);
+        var r = importParsedRows[parseInt(idx)];
+        if (r) r.xlsxCat = catVal;
+        _moveImportRowToNew(idx);
       }
     }
     if (subVal) {
