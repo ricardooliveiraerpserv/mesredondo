@@ -449,14 +449,21 @@ async function _diagLoad() {
     if (Array.isArray(data) && data.length > 0) msg += 'Ex: mes=' + data[0].mes + ' ano=' + data[0].ano + '\n';
   } catch(e) { msg += 'Fetch direto ERRO: ' + e.message + '\n'; }
 
-  // Teste 2: dbLoadLancamentos (caminho normal do app)
-  try {
-    var lncs = await dbLoadLancamentos();
-    msg += '\ndbLoadLancamentos → ' + (lncs ? lncs.length : 0) + ' itens\n';
-    if (lncs && lncs.length > 0) msg += 'Ex: mes=' + lncs[0].mes + ' ano=' + lncs[0].ano + '\n';
-  } catch(e) { msg += '\ndbLoadLancamentos ERRO: ' + e.message + '\n'; }
+  // Meses com dados no memCache
+  if (_memCache && _memCache.lancamentos && _memCache.lancamentos.length) {
+    var contaMes = {};
+    _memCache.lancamentos.forEach(function(l) {
+      var k = (l.ano||'?') + '-' + String(l.mes||'?').padStart(2,'0');
+      contaMes[k] = (contaMes[k]||0) + 1;
+    });
+    var meses = Object.keys(contaMes).sort();
+    msg += '\nMeses com dados (' + meses.length + '):\n';
+    msg += meses.slice(0,5).join(', ');
+    if (meses.length > 5) msg += ' ... ' + meses.slice(-3).join(', ');
+    msg += '\n';
+  }
 
-  // Teste 3: contar no banco
+  // Contar no banco
   try {
     var res2 = await fetch(SB_URL + '/rest/v1/mf_lancamentos?user_id=eq.' + uid + '&select=id', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token, 'Prefer': 'count=exact', 'Range': '0-0' }
