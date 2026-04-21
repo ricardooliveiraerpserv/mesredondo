@@ -3912,7 +3912,7 @@ function sortImport(col) {
   // Sort importParsedRows
   var sorted = importParsedRows.slice().sort(function(a, b) {
     var va, vb;
-    if (col === 'date')  { va = a.date || ''; vb = b.date || ''; }
+    if (col === 'date')  { var _pa=(a.date||'').split('/'); var _pb=(b.date||'').split('/'); va=_pa.length===3?_pa[2]+_pa[1]+_pa[0]:(a.date||''); vb=_pb.length===3?_pb[2]+_pb[1]+_pb[0]:(b.date||''); }
     else if (col === 'desc')  { va = (a.desc || a.descRaw || '').toLowerCase(); vb = (b.desc || b.descRaw || '').toLowerCase(); }
     else if (col === 'pgto')  { va = (a.xlsxPgto || '').toLowerCase(); vb = (b.xlsxPgto || '').toLowerCase(); }
     else if (col === 'tipo')  { va = (a.xlsxTipoLanc || '').toLowerCase(); vb = (b.xlsxTipoLanc || '').toLowerCase(); }
