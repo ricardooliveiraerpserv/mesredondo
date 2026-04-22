@@ -3728,9 +3728,10 @@ function _moveImportRowToNew(idx) {
 }
 function _checkAndMigrateToNew(idx) {
   var catBtn = document.querySelector('.import-cat-btn[data-idx="' + idx + '"]');
-  var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
-  if (!catBtn || !subBtn) return;
-  if ((catBtn.dataset.cat || '') && (subBtn.dataset.sub || '')) _moveImportRowToNew(idx);
+  var subSel = document.querySelector('.import-sub-sel[data-idx="' + idx + '"]');
+  if (!catBtn || !subSel) return;
+  // subSel.value só é não-vazio se a opção realmente existe e foi selecionada
+  if ((catBtn.dataset.cat || '') && subSel.value) _moveImportRowToNew(idx);
 }
 
 function _selectImportCat(item) {
