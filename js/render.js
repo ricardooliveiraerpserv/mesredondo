@@ -2775,6 +2775,7 @@ function onImportCatChange(catSel) {
     var newVal = subSel.value;
     subBtn.textContent = newVal || '— Nenhuma —';
     subBtn.dataset.sub = newVal;
+    subBtn.dataset.userSubSet = ''; // categoria mudou → sub precisa ser re-selecionada pelo usuário
   }
 }
 
@@ -3728,10 +3729,10 @@ function _moveImportRowToNew(idx) {
 }
 function _checkAndMigrateToNew(idx) {
   var catBtn = document.querySelector('.import-cat-btn[data-idx="' + idx + '"]');
-  var subSel = document.querySelector('.import-sub-sel[data-idx="' + idx + '"]');
-  if (!catBtn || !subSel) return;
-  // subSel.value só é não-vazio se a opção realmente existe e foi selecionada
-  if ((catBtn.dataset.cat || '') && subSel.value) _moveImportRowToNew(idx);
+  var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
+  if (!catBtn || !subBtn) return;
+  // Migra SOMENTE se o usuário explicitamente preencheu os dois campos
+  if ((catBtn.dataset.cat || '') && subBtn.dataset.userSubSet === '1') _moveImportRowToNew(idx);
 }
 
 function _selectImportCat(item) {
@@ -3826,13 +3827,14 @@ function _selectImportSub(item) {
   if (!btn) return;
   btn.textContent = val || '— Nenhuma —';
   btn.dataset.sub = val;
+  btn.dataset.userSubSet = val ? '1' : ''; // marca seleção explícita do usuário
   var idx = btn.dataset.idx;
   var sel = document.querySelector('.import-sub-sel[data-idx="' + idx + '"]');
   if (sel) { sel.value = val; }
   document.getElementById('importSubPicker').style.display = 'none';
   _importSubPickerTarget = null;
   // Verifica migração ao preencher sub
-  if (idx !== '__bulk__' && val) _checkAndMigrateToNew(idx);
+  if (idx !== '__bulk__') _checkAndMigrateToNew(idx);
 }
 document.addEventListener('click', function(e) {
   var picker = document.getElementById('importSubPicker');
@@ -3884,6 +3886,7 @@ function applyImportBulkCat() {
         }
         subBtn.textContent = subSel.value || subVal;
         subBtn.dataset.sub = subSel.value || subVal;
+        subBtn.dataset.userSubSet = (subSel.value || subVal) ? '1' : ''; // seleção explícita via bulk
       }
     }
     // Migra só quando ambos foram explicitamente passados no bulk
