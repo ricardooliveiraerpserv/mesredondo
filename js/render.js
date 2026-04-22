@@ -3746,11 +3746,10 @@ function _selectImportCat(item) {
   if (sel) { sel.value = val; onImportCatChange(sel); }
   document.getElementById('importCatPicker').style.display = 'none';
   _importCatPickerTarget = null;
-  // Sync para importParsedRows e verifica migração
+  // Sync para importParsedRows (sem migrar — aguarda sub ser preenchida pelo usuário)
   if (idx !== '__bulk__') {
     var r = importParsedRows[parseInt(idx)];
     if (r) r.xlsxCat = val;
-    if (val) _checkAndMigrateToNew(idx);
   }
 }
 document.addEventListener('click', function(e) {
@@ -3869,7 +3868,6 @@ function applyImportBulkCat() {
         onImportCatChange(catSel);
         var r = importParsedRows[parseInt(idx)];
         if (r) r.xlsxCat = catVal;
-        _checkAndMigrateToNew(idx);
       }
     }
     if (subVal) {
@@ -3887,6 +3885,8 @@ function applyImportBulkCat() {
         subBtn.dataset.sub = subSel.value || subVal;
       }
     }
+    // Migra só quando ambos foram explicitamente passados no bulk
+    if (catVal && subVal) _checkAndMigrateToNew(idx);
     count++;
   });
   var info = document.getElementById('imp-bulk-info');
