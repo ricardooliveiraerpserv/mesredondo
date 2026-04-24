@@ -2763,11 +2763,11 @@ function onImportTipoChange(sel) {
 }
 
 function onImportCatChange(catSel) {
-  var idx = catSel.dataset.idx;
+  var idx = parseInt(catSel.dataset.idx);
   var catNome = catSel.value;
   var subSel = document.querySelector('.import-sub-sel[data-idx="' + idx + '"]');
   if (!subSel) return;
-  var r = importParsedRows[parseInt(idx)];
+  var r = importParsedRows[idx];
   var sugSub = r ? suggestSub(r.desc, catNome) : null;
   subSel.innerHTML = buildSubOpts(catNome, sugSub || '');
   var subBtn = document.querySelector('.import-sub-btn[data-idx="' + idx + '"]');
@@ -2777,6 +2777,64 @@ function onImportCatChange(catSel) {
     subBtn.dataset.sub = newVal;
     subBtn.dataset.userSubSet = ''; // categoria mudou → sub precisa ser re-selecionada pelo usuário
   }
+
+  // Auto-preenche outras linhas com mesma descrição que ainda não têm categoria
+  if (catNome && r && r.desc) {
+    var descRef = (r.desc || '').toLowerCase().trim();
+    importParsedRows.forEach(function(other) {
+      if (other._origIdx === idx) return;
+      if ((other.desc || '').toLowerCase().trim() !== descRef) return;
+      var otherCatSel = document.querySelector('.import-cat-sel[data-idx="' + other._origIdx + '"]');
+      if (otherCatSel && !otherCatSel.value) {
+        otherCatSel.value = catNome;
+        var otherCatBtn = document.querySelector('.import-cat-btn[data-idx="' + other._origIdx + '"]');
+        if (otherCatBtn) { otherCatBtn.textContent = catNome; otherCatBtn.dataset.cat = catNome; }
+        var otherSubSel = document.querySelector('.import-sub-sel[data-idx="' + other._origIdx + '"]');
+        var otherSug = suggestSub(other.desc, catNome);
+        if (otherSubSel) {
+          otherSubSel.innerHTML = buildSubOpts(catNome, otherSug || '');
+          var otherSubBtn = document.querySelector('.import-sub-btn[data-idx="' + other._origIdx + '"]');
+          if (otherSubBtn) { otherSubBtn.textContent = otherSug || '— Nenhuma —'; otherSubBtn.dataset.sub = otherSug || ''; }
+        }
+        other.categoria = catNome;
+        if (otherSug) other.subCategoria = otherSug;
+      } else if (!otherCatSel) {
+        if (!other.categoria) {
+          other.categoria = catNome;
+          var s = suggestSub(other.desc, catNome);
+          if (s && !other.subCategoria) other.subCategoria = s;
+        }
+      }
+    });
+  }
+}
+
+function onImportSubChange(subSel) {
+  var idx = parseInt(subSel.dataset.idx);
+  var subNome = subSel.value;
+  var r = importParsedRows[idx];
+  if (!r || !r.desc) return;
+  var catSel = document.querySelector('.import-cat-sel[data-idx="' + idx + '"]');
+  var catNome = catSel ? catSel.value : (r.categoria || '');
+  if (!catNome || !subNome) return;
+
+  var descRef = (r.desc || '').toLowerCase().trim();
+  importParsedRows.forEach(function(other) {
+    if (other._origIdx === idx) return;
+    if ((other.desc || '').toLowerCase().trim() !== descRef) return;
+    var otherCatSel = document.querySelector('.import-cat-sel[data-idx="' + other._origIdx + '"]');
+    var otherCat = otherCatSel ? otherCatSel.value : (other.categoria || '');
+    if (otherCat !== catNome) return;
+    var otherSubSel = document.querySelector('.import-sub-sel[data-idx="' + other._origIdx + '"]');
+    if (otherSubSel && !otherSubSel.value) {
+      otherSubSel.value = subNome;
+      var otherSubBtn = document.querySelector('.import-sub-btn[data-idx="' + other._origIdx + '"]');
+      if (otherSubBtn) { otherSubBtn.textContent = subNome; otherSubBtn.dataset.sub = subNome; }
+      other.subCategoria = subNome;
+    } else if (!otherSubSel && !other.subCategoria) {
+      other.subCategoria = subNome;
+    }
+  });
 }
 
 // ── Modal open/close ──
@@ -3634,6 +3692,7 @@ function applyImportFilters() {
   var countEl = document.getElementById('impFiltroCount');
   if (countEl) countEl.textContent = hasFilter ? (filtered.length + ' de ' + importParsedRows.length + ' exibidos') : '';
 
+  _saveImportCurrentValues();
   renderImportPreview(filtered);
 }
 
@@ -3651,6 +3710,7 @@ function clearImportFilters() {
   }
   var countEl = document.getElementById('impFiltroCount');
   if (countEl) countEl.textContent = '';
+  _saveImportCurrentValues();
   renderImportPreview(importParsedRows);
 }
 
@@ -3931,6 +3991,48 @@ function importToggleDupSection() {
   btn.textContent = hidden ? '▲ Ocultar' : '▼ Mostrar';
 }
 
+function _saveImportCurrentValues() {
+  document.querySelectorAll('.import-cat-sel').forEach(function(sel) {
+    var r = importParsedRows[parseInt(sel.dataset.idx)];
+    if (r) r.categoria = sel.value;
+  });
+  document.querySelectorAll('.import-sub-sel').forEach(function(sel) {
+    var r = importParsedRows[parseInt(sel.dataset.idx)];
+    if (r) r.subCategoria = sel.value;
+  });
+  document.querySelectorAll('.import-venc').forEach(function(inp) {
+    var r = importParsedRows[parseInt(inp.dataset.idx)];
+    if (!r) return;
+    var v = inp.value.trim();
+    if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) { var p = v.split('-'); v = p[2]+'/'+p[1]+'/'+p[0]; }
+    r.xlsxVenc = v;
+  });
+  document.querySelectorAll('.import-pago').forEach(function(cb) {
+    var r = importParsedRows[parseInt(cb.dataset.idx)];
+    if (r) r.xlsxPago = cb.checked;
+  });
+  document.querySelectorAll('.import-pgto').forEach(function(sel) {
+    var r = importParsedRows[parseInt(sel.dataset.idx)];
+    if (r) r.xlsxPgto = sel.value;
+  });
+  document.querySelectorAll('.import-tipo-lanc').forEach(function(sel) {
+    var r = importParsedRows[parseInt(sel.dataset.idx)];
+    if (r) r.xlsxTipoLanc = sel.value;
+  });
+  document.querySelectorAll('.import-nmeses').forEach(function(inp) {
+    var r = importParsedRows[parseInt(inp.dataset.idx)];
+    if (r && inp.value) r.xlsxNMeses = parseInt(inp.value) || r.xlsxNMeses;
+  });
+  document.querySelectorAll('.import-check').forEach(function(cb) {
+    var r = importParsedRows[parseInt(cb.dataset.idx)];
+    if (r) r._userChecked = cb.checked;
+  });
+  document.querySelectorAll('.import-terc-sel').forEach(function(sel) {
+    var r = importParsedRows[parseInt(sel.dataset.idx)];
+    if (r) r.xlsxTerc = sel.value;
+  });
+}
+
 function sortImport(col) {
   if (_importSortCol === col) {
     _importSortAsc = !_importSortAsc;
@@ -3971,6 +4073,7 @@ function sortImport(col) {
     if (va > vb) return _importSortAsc ? 1 : -1;
     return 0;
   });
+  _saveImportCurrentValues();
   renderImportPreview(sorted);
 }
 
@@ -4122,9 +4225,10 @@ function renderImportPreview(rows) {
 
     var trStyle = 'border-bottom:1px solid var(--border)';
     if (_isDupIA) trStyle += ';background:rgba(251,191,36,0.04)';
+    var _isChecked = (r._userChecked !== undefined) ? r._userChecked : !_isDup;
     var row = '<tr style="' + trStyle + '" data-dup="' + (_isDup?'1':'0') + '" data-dup-ia="' + (_isDupIA?'1':'0') + '">';
     row += '<td style="padding:5px 4px;text-align:center;border-right:1px solid var(--border)">'
-      + '<input type="checkbox" class="import-check" data-idx="' + i + '"' + (_isDup ? '' : ' checked') + ' onchange="updateImportTotals()">'
+      + '<input type="checkbox" class="import-check" data-idx="' + i + '"' + (_isChecked ? ' checked' : '') + ' onchange="updateImportTotals()">'
       + '</td>';
     row += '<td style="padding:5px 6px;white-space:nowrap;color:var(--text2);font-size:0.78rem;border-right:1px solid var(--border)">' + r.date + '</td>';
     row += '<td style="padding:5px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.78rem;border-right:1px solid var(--border)" title="' + r.desc + '">' + (r.desc || r.descRaw) + '</td>';
@@ -4170,7 +4274,7 @@ function renderImportPreview(rows) {
     var tipoSign  = r.xlsxTipo === 'receita' ? '+' : isEstorno ? '+' : '-';
     row += '<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:0.78rem;white-space:nowrap;border-right:1px solid var(--border)"><span style="color:' + tipoColor + '">' + tipoSign + fmtBR(r.value) + '</span></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-cat-btn" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onclick="_openImportCatPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">— Sem categoria —</span><select class="import-cat-sel" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onchange="onImportCatChange(this)" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + catIcon + '</span></div></td>';
-    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-sub-btn" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" onclick="_openImportSubPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">— Nenhuma —</span><select class="import-sub-sel" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + subIcon + '</span></div></td>';
+    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-sub-btn" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" onclick="_openImportSubPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">— Nenhuma —</span><select class="import-sub-sel" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" onchange="onImportSubChange(this)" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + subIcon + '</span></div></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><select class="import-terc-sel" data-idx="' + i + '" style="' + selStyle + 'min-width:110px"></select></td>';
     var vencVal = r.xlsxVenc || '';
     // Converte DD/MM/AAAA para AAAA-MM-DD para o input type=date
@@ -4566,9 +4670,9 @@ function _doImportInner() {
   var nMesesByIdx = {};
   document.querySelectorAll('.import-nmeses').forEach(function(inp) { nMesesByIdx[parseInt(inp.dataset.idx)] = parseInt(inp.value) || 0; });
 
-  var defaultStatus = document.getElementById('importDefaultStatus').value;
-  var futureStatus  = document.getElementById('importFutureStatus').value;
-  var defaultTipo   = document.getElementById('importDefaultTipo').value || 'despesa';
+  var defaultStatus = document.getElementById('importDefaultStatus') ? document.getElementById('importDefaultStatus').value : 'pendente';
+  var futureStatus  = document.getElementById('importFutureStatus') ? document.getElementById('importFutureStatus').value : 'pendente';
+  var defaultTipo   = document.getElementById('importDefaultTipo') ? (document.getElementById('importDefaultTipo').value || 'despesa') : 'despesa';
   var lancamentos   = loadData();
   var added = 0;
 
