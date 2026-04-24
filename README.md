@@ -1,9 +1,9 @@
-# Finclaro — Estrutura do Projeto Refatorada
+# Mês Redondo — Estrutura do Projeto Refatorada
 
 ## 📁 Estrutura de Pastas
 
 ```
-finclaro/
+mesredondo/
 ├── index.html              ← HTML principal (sem CSS/JS inline)
 ├── sw.js                   ← Service Worker (arquivo seu, manter como está)
 ├── css/

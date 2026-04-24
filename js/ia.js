@@ -312,9 +312,6 @@ function _iaHistoricoImport(limite) {
 }
 
 async function iaVerificarDuplicatas() {
-  console.log('[IA] iaVerificarDuplicatas desabilitada — configure ANTHROPIC_API_KEY');
-  return;
-  // DESABILITADA — código abaixo não executa
   if (!window.importParsedRows || !importParsedRows.length) return;
 
   // Pega apenas linhas que NÃO foram marcadas como duplicata exata pelo sistema

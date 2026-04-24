@@ -20,19 +20,36 @@ const _sbClient = createClient(SB_URL, SB_KEY, {
 
 // ── Token em memória — evita getSession() lento ──────
 window._cachedAccessToken = null;
+window._cachedTokenExp = 0;
+
+function _setToken(t) {
+  window._cachedAccessToken = t || null;
+  if (t) {
+    try {
+      var exp = JSON.parse(atob(t.split('.')[1])).exp;
+      window._cachedTokenExp = exp || 0;
+    } catch(e) { window._cachedTokenExp = 0; }
+  } else {
+    window._cachedTokenExp = 0;
+  }
+}
+
+function _tokenValid() {
+  return !!(window._cachedAccessToken && window._cachedTokenExp > Date.now() / 1000 + 60);
+}
 
 async function _getValidToken() {
-  if (window._cachedAccessToken) return window._cachedAccessToken;
+  if (_tokenValid()) return window._cachedAccessToken;
   try {
     const tout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000));
     const result = await Promise.race([_sbClient.auth.getSession(), tout]);
     const token = result?.data?.session?.access_token;
-    if (token) { window._cachedAccessToken = token; return token; }
+    if (token) { _setToken(token); return token; }
   } catch(e) { console.warn('[getValidToken] getSession falhou:', e.message); }
   try {
     const { data: rd } = await _sbClient.auth.refreshSession();
     const token = rd?.session?.access_token;
-    if (token) { window._cachedAccessToken = token; return token; }
+    if (token) { _setToken(token); return token; }
   } catch(e) { console.warn('[getValidToken] refresh falhou:', e.message); }
   return null;
 }
@@ -161,9 +178,9 @@ async function _mobileRefresh(btn) {
     if (error || !data.session) {
       const { data: rd } = await _sbClient.auth.refreshSession();
       if (!rd?.session) { clearTimeout(safetyTimeout); _done('⚠️', 2000); return; }
-      window._cachedAccessToken = rd.session.access_token;
+      _setToken(rd.session.access_token);
     } else {
-      window._cachedAccessToken = data.session.access_token;
+      _setToken(data.session.access_token);
     }
 
     // Flush de pendências offline primeiro
@@ -342,7 +359,7 @@ async function authLogout() {
   _currentUser = null;
   _isAdmin = false;
   _clearMemCache();
-  window._cachedAccessToken = null;
+  _setToken(null);
   // Limpa apenas chaves de UI/sessão — dados financeiros ficam no banco
   ['sb_last_save', 'sb_local_dirty', 'mf_auth_session'].forEach(k => localStorage.removeItem(k));
   const _dadosSec = document.getElementById('dados-admin-section');
@@ -357,8 +374,8 @@ async function authLogout() {
 // ── _onLogin — executado após autenticação bem-sucedida ──
 async function _onLogin(user, sessionToken) {
   _currentUser = user;
-  window._currentUser = user; // garante acesso via window._currentUser para db.js
-  window._cachedAccessToken = sessionToken || user.access_token || null;
+  window._currentUser = user;
+  _setToken(sessionToken || user.access_token || null);
 
   const meta = user.user_metadata || user.app_metadata || {};
   _isAdmin = meta.role === 'admin';
@@ -1000,7 +1017,7 @@ async function perfilSavePassword() {
     } else if (event === 'TOKEN_REFRESHED' && session && _currentUser) {
       _currentUser = session.user;
       window._currentUser = session.user;
-      window._cachedAccessToken = session.access_token;
+      _setToken(session.access_token);
     } else if (event === 'SIGNED_OUT') {
       _recoveryHandled = false;
       _loginDone = false;

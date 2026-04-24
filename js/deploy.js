@@ -304,7 +304,7 @@ self.addEventListener('fetch', e => {
     var commitResp = await ghFetch(apiBase + '/git/commits', {
       method: 'POST',
       body: JSON.stringify({
-        message: '🚀 [' + versao + '] Deploy Finclaro — ' + new Date().toLocaleString('pt-BR'),
+        message: '🚀 [' + versao + '] Deploy Mês Redondo — ' + new Date().toLocaleString('pt-BR'),
         tree: treeData.sha,
         parents: [parentCommitSha]
       })
