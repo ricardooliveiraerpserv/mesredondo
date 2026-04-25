@@ -1371,6 +1371,13 @@ function sortItems(items) {
       case 'tipo':       av = (a.tipo||'');                bv = (b.tipo||'');                break;
       case 'status':     av = (a.status||'');              bv = (b.status||'');              break;
       case 'valor':      av = a.valor;                     bv = b.valor;                     break;
+      case 'parcAtual': {
+        var aHasParc = !!a.parcAtual, bHasParc = !!b.parcAtual;
+        if (!aHasParc && !bHasParc) return 0;
+        if (!aHasParc) return 1;
+        if (!bHasParc) return -1;
+        av = a.parcAtual; bv = b.parcAtual; break;
+      }
       default:           av = parseDateStr(a.vencimento);  bv = parseDateStr(b.vencimento);
     }
     if (av < bv) return -1 * sortDir;
