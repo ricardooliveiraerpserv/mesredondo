@@ -73,7 +73,7 @@ function getMonthData() {
 
 function clearLancFiltros() {
   if (window.FSEL) {
-    ['filtroTipo','filtroStatus','filtroCategoria','filtroSubCategoria','filtroTipoLanc','filtroPagamento','filtroTerceiro','filtroBanco'].forEach(id => FSEL.reset(id));
+    ['filtroTipo','filtroStatus','filtroCategoria','filtroSubCategoria','filtroSemCat','filtroTipoLanc','filtroPagamento','filtroTerceiro','filtroBanco'].forEach(id => FSEL.reset(id));
   }
   const _fb = document.getElementById('filtroBusca');
   if (_fb) _fb.value = '';
@@ -86,7 +86,7 @@ function _checkLancFiltrosAtivos() {
   const filtroBuscaEl = document.getElementById('filtroBusca');
   if (!filtroBuscaEl) return; // aba Lançamentos ainda não renderizada
   const busca = (filtroBuscaEl.value || '').trim();
-  const fselIds = ['filtroTipo','filtroStatus','filtroCategoria','filtroSubCategoria','filtroTipoLanc','filtroPagamento','filtroTerceiro','filtroBanco'];
+  const fselIds = ['filtroTipo','filtroStatus','filtroCategoria','filtroSubCategoria','filtroSemCat','filtroTipoLanc','filtroPagamento','filtroTerceiro','filtroBanco'];
   const algumAtivo = busca.length > 0 || (window.FSEL && fselIds.some(id => FSEL.getValues(id).length > 0));
   const btn = document.getElementById('btnClearLancFiltros');
   if (btn) btn.style.display = algumAtivo ? 'inline-flex' : 'none';
@@ -1385,6 +1385,7 @@ function renderAllTable() {
   const status    = window.FSEL ? FSEL.getValues('filtroStatus')        : [];
   const cat       = window.FSEL ? FSEL.getValues('filtroCategoria')     : [];
   const subCat    = window.FSEL ? FSEL.getValues('filtroSubCategoria')  : [];
+  const semCat    = window.FSEL ? FSEL.getValues('filtroSemCat')        : [];
   const tipoLanc  = window.FSEL ? FSEL.getValues('filtroTipoLanc')      : [];
   const pagFiltro = window.FSEL ? FSEL.getValues('filtroPagamento')     : [];
   const tercFiltro= window.FSEL ? FSEL.getValues('filtroTerceiro')      : [];
@@ -1406,6 +1407,8 @@ function renderAllTable() {
     if (status.length    && !status.includes(l.status)) return false;
     if (cat.length       && !cat.includes(l.categoria)) return false;
     if (subCat.length    && !subCat.includes(l.subCategoria)) return false;
+    if (semCat.includes('sem_cat') && (l.categoria && l.categoria.trim() !== '')) return false;
+    if (semCat.includes('sem_sub') && (l.subCategoria && l.subCategoria.trim() !== '' && l.subCategoria !== 'Não identificado')) return false;
     if (tipoLanc.length  && !tipoLanc.includes(l.tipoLanc || 'variavel')) return false;
     if (pagFiltro.length) {
       // FIX: normaliza comparação para evitar falhas por case/acento,

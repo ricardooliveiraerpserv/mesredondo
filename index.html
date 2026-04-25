@@ -901,6 +901,13 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
         </select>
         <div class="fsel" id="fsel-filtroSubCategoria"></div>
 
+        <select id="filtroSemCat" onchange="renderAll()" style="display:none">
+          <option value="">Todas classificações</option>
+          <option value="sem_cat">⚠ Sem categoria</option>
+          <option value="sem_sub">⚠ Sem sub-cat</option>
+        </select>
+        <div class="fsel" id="fsel-filtroSemCat"></div>
+
         <select id="filtroTipoLanc" onchange="renderAll()" style="display:none">
           <option value="">Todos os lançamentos</option>
           <option value="variavel">📦 Variável</option>

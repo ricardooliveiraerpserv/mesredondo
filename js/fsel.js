@@ -536,6 +536,7 @@ function migrateParcelValues() {
   FSEL.build('fsel-filtroStatus',        'filtroStatus',        statusOpts,    function(){ renderAll(); });
   FSEL.build('fsel-filtroCategoria',     'filtroCategoria',     rb('filtroCategoria'), function(){ onFiltroCategChange(false); renderAll(); });
   FSEL.build('fsel-filtroSubCategoria',  'filtroSubCategoria',  rb('filtroSubCategoria'), function(){ onFiltroSubCatChange(); });
+  FSEL.build('fsel-filtroSemCat',        'filtroSemCat',        [{value:'',text:'Todas classificações'},{value:'sem_cat',text:'⚠ Sem categoria'},{value:'sem_sub',text:'⚠ Sem sub-cat'}], function(){ renderAll(); });
   FSEL.build('fsel-filtroTipoLanc',      'filtroTipoLanc',      tipoLancOpts,  function(){ renderAll(); });
   FSEL.build('fsel-filtroPagamento',     'filtroPagamento',     rb('filtroPagamento'), function(){ renderAll(); });
   FSEL.build('fsel-filtroTerceiro',      'filtroTerceiro',      rb('filtroTerceiro'),  function(){ renderAll(); });
@@ -556,6 +557,7 @@ function migrateParcelValues() {
   FSEL.build('fsel-filtroStatus','filtroStatus',statusOpts,function(){renderAll();});
   FSEL.build('fsel-filtroCategoria','filtroCategoria',rb('filtroCategoria'),function(){onFiltroCategChange(false);renderAll();});
   FSEL.build('fsel-filtroSubCategoria','filtroSubCategoria',rb('filtroSubCategoria'),function(){onFiltroSubCatChange();});
+  FSEL.build('fsel-filtroSemCat','filtroSemCat',[{value:'',text:'Todas classificações'},{value:'sem_cat',text:'⚠ Sem categoria'},{value:'sem_sub',text:'⚠ Sem sub-cat'}],function(){renderAll();});
   FSEL.build('fsel-filtroTipoLanc','filtroTipoLanc',tipoLancOpts,function(){renderAll();});
   FSEL.build('fsel-filtroPagamento','filtroPagamento',rb('filtroPagamento'),function(){renderAll();});
   FSEL.build('fsel-filtroTerceiro','filtroTerceiro',rb('filtroTerceiro'),function(){renderAll();});
