@@ -189,15 +189,32 @@ async function dbUpdateLancamento(id, fields) {
 
 async function dbDeleteLancamento(id) {
   const uid = _uid();
+  // Remove do cache imediatamente — UI responde sem esperar a rede
+  if (_memCache.lancamentos) {
+    _memCache.lancamentos = _memCache.lancamentos.filter(l => String(l.id) !== String(id));
+  }
+  const path = 'mf_lancamentos?id=eq.' + encodeURIComponent(id) + '&user_id=eq.' + uid;
   try {
-    await _dbFetch('mf_lancamentos?id=eq.' + encodeURIComponent(id) + '&user_id=eq.' + uid, 'PATCH', { deleted: true });
-    // Remove do cache imediatamente — registro soft-deleted não deve aparecer na UI
-    if (_memCache.lancamentos) {
-      _memCache.lancamentos = _memCache.lancamentos.filter(l => String(l.id) !== String(id));
-    }
+    await _dbFetch(path, 'PATCH', { deleted: true });
     console.log('[DB] deleteLancamento (soft) OK:', id);
   } catch (e) {
-    console.warn('[DB] deleteLancamento erro:', e.message);
+    // Falhou agora → enfileira para retry automático no próximo flush
+    _addPending({ path, method: 'PATCH', body: { deleted: true } });
+    console.warn('[DB] deleteLancamento enfileirado para retry:', id, e.message);
+  }
+}
+
+async function dbLoadDeletedLancamentos() {
+  try {
+    const uid = _uid();
+    const rows = await _dbFetch(
+      'mf_lancamentos?user_id=eq.' + uid + '&deleted=eq.true&order=_ts.desc',
+      'GET'
+    );
+    return (rows || []).map(_dbRowToLanc);
+  } catch (e) {
+    console.warn('[DB] loadDeletedLancamentos erro:', e.message);
+    return [];
   }
 }
 

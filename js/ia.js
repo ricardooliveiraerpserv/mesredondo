@@ -101,6 +101,20 @@ async function iaSugerirCategoria(desc) {
     box.style.display = 'flex';
   }
 
+  // Consulta histórico de deletados antes de chamar a IA
+  try {
+    var _deletedIdx = await _iaDeletedIndex();
+    var _deletedMatch = _deletedIdx[desc.trim().toLowerCase()];
+    if (_deletedMatch && _deletedMatch.categoria) {
+      var fCat = document.getElementById('fCategoria');
+      if (fCat && fCat.value && fCat.value !== '') { if (box) box.style.display = 'none'; return; }
+      _ia_pendingCat = _deletedMatch.categoria;
+      _ia_pendingSub = _deletedMatch.subCategoria || null;
+      _iaMostrarSugestao(_deletedMatch.categoria, _deletedMatch.subCategoria);
+      return;
+    }
+  } catch(_e) {}
+
   var prompt = [
     'Você é um assistente de finanças pessoais.',
     'Categorias disponíveis (nome [sub-categorias]):\n' + cats.join('\n'),
@@ -217,6 +231,26 @@ async function iaCategorizarImportacao() {
   if (!cats.length) { if (!window._iaChamadoPorBootstrap) alert('Nenhuma categoria cadastrada.'); return; }
   var hist = _iaHistorico();
 
+  // Etapa 1: recupera do histórico de registros deletados (sem chamar a IA)
+  try {
+    var _dIdx = await _iaDeletedIndex();
+    var _recuperados = 0;
+    rows.forEach(function(r) {
+      var key = (r.desc || '').trim().toLowerCase();
+      var m = _dIdx[key];
+      if (m && m.categoria) {
+        r.categoria    = m.categoria;
+        r.subCategoria = m.subCategoria;
+        if (m.terceiro) r.terceiro = m.terceiro;
+        r._iaFromDeleted = true;
+        _recuperados++;
+      }
+    });
+    if (_recuperados > 0) console.log('[IA] Recuperados do histórico deletado:', _recuperados, 'de', rows.length);
+    // Descarta os já classificados — só envia o restante para a IA
+    rows = rows.filter(function(r) { return !r.categoria; });
+  } catch(_e) { console.warn('[IA] Erro no índice de deletados:', _e.message); }
+
   // Progresso
   var btn = document.getElementById('iaBtnImport');
   var barWrap = document.getElementById('iaProgressWrap');
@@ -224,6 +258,16 @@ async function iaCategorizarImportacao() {
   var barLabel = document.getElementById('iaProgressLabel');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Processando...'; }
   if (barWrap) barWrap.style.display = 'flex';
+
+  // Se todos foram resolvidos pelo histórico de deletados, não precisa chamar a IA
+  if (!rows.length) {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Categorizar com IA'; }
+    if (barWrap) setTimeout(function() { barWrap.style.display = 'none'; }, 1000);
+    if (!window._iaChamadoPorBootstrap && typeof renderImportPreview === 'function') {
+      renderImportPreview(window.importParsedRows);
+    }
+    return;
+  }
 
   var total = rows.length;
   var processados = 0;
@@ -309,6 +353,32 @@ function _iaHistoricoImport(limite) {
       return { desc: l.desc, valor: Math.abs(l.valor || 0), data: d };
     });
   } catch(e) { return []; }
+}
+
+// Índice de registros deletados: desc normalizada → {categoria, subCategoria, terceiro}
+// Permite recuperar classificações sem chamar a IA quando o usuário reimporta
+async function _iaDeletedIndex() {
+  if (typeof dbLoadDeletedLancamentos !== 'function') return {};
+  try {
+    var deletados = await dbLoadDeletedLancamentos();
+    var idx = {};
+    // Já vêm ordenados por _ts.desc — o mais recente de cada desc vence
+    deletados.forEach(function(l) {
+      if (!l.desc || !l.categoria) return;
+      var key = l.desc.trim().toLowerCase();
+      if (!idx[key]) {
+        idx[key] = {
+          categoria:    l.categoria,
+          subCategoria: l.subCategoria || '',
+          terceiro:     l.terceiro     || ''
+        };
+      }
+    });
+    return idx;
+  } catch(e) {
+    console.warn('[IA] _iaDeletedIndex erro:', e.message);
+    return {};
+  }
 }
 
 async function iaVerificarDuplicatas() {
