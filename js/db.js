@@ -93,7 +93,7 @@ async function _flushPending() {
 async function dbLoadLancamentos(mes, ano) {
   try {
     const uid = _uid();
-    const baseFilter = 'user_id=eq.' + uid + (mes && ano ? '&mes=eq.' + mes + '&ano=eq.' + ano : '');
+    const baseFilter = 'user_id=eq.' + uid + '&deleted=eq.false' + (mes && ano ? '&mes=eq.' + mes + '&ano=eq.' + ano : '');
     const PAGE = 1000;
     let all = [];
     let offset = 0;
@@ -189,14 +189,13 @@ async function dbUpdateLancamento(id, fields) {
 
 async function dbDeleteLancamento(id) {
   const uid = _uid();
-  // DELETE direto sem _flushPending — evita que pendentes travem o delete
   try {
-    await _dbFetch('mf_lancamentos?id=eq.' + encodeURIComponent(id) + '&user_id=eq.' + uid, 'DELETE');
-    // Remove do cache imediatamente (não espera reload do banco)
+    await _dbFetch('mf_lancamentos?id=eq.' + encodeURIComponent(id) + '&user_id=eq.' + uid, 'PATCH', { deleted: true });
+    // Remove do cache imediatamente — registro soft-deleted não deve aparecer na UI
     if (_memCache.lancamentos) {
       _memCache.lancamentos = _memCache.lancamentos.filter(l => String(l.id) !== String(id));
     }
-    console.log('[DB] deleteLancamento OK:', id);
+    console.log('[DB] deleteLancamento (soft) OK:', id);
   } catch (e) {
     console.warn('[DB] deleteLancamento erro:', e.message);
   }
@@ -231,7 +230,8 @@ function _lancToDbRow(l, uid) {
     banco:          v(l.banco),
     parc_atual:     l.parcAtual != null ? Number(l.parcAtual) : null,
     parc_total:     l.parcTotal != null ? Number(l.parcTotal) : null,
-    _ts:            l._ts || Date.now()
+    _ts:            l._ts || Date.now(),
+    deleted:        false
   };
 }
 
