@@ -231,6 +231,15 @@ async function iaCategorizarImportacao() {
   if (!cats.length) { if (!window._iaChamadoPorBootstrap) alert('Nenhuma categoria cadastrada.'); return; }
   var hist = _iaHistorico();
 
+  // Desabilita botão imediatamente — impede duplo clique durante qualquer await
+  var btn = document.getElementById('iaBtnImport');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Processando...'; }
+
+  function _iaEsconderBarra() {
+    var w = document.getElementById('iaProgressWrap');
+    if (w) w.style.display = 'none';
+  }
+
   // Etapa 1: recupera do histórico de registros deletados (sem chamar a IA)
   try {
     var _dIdx = await _iaDeletedIndex();
@@ -251,23 +260,21 @@ async function iaCategorizarImportacao() {
     rows = rows.filter(function(r) { return !r.categoria; });
   } catch(_e) { console.warn('[IA] Erro no índice de deletados:', _e.message); }
 
-  // Progresso
-  var btn = document.getElementById('iaBtnImport');
-  var barWrap = document.getElementById('iaProgressWrap');
-  var bar = document.getElementById('iaProgressBar');
-  var barLabel = document.getElementById('iaProgressLabel');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Processando...'; }
-  if (barWrap) barWrap.style.display = 'flex';
-
   // Se todos foram resolvidos pelo histórico de deletados, não precisa chamar a IA
   if (!rows.length) {
     if (btn) { btn.disabled = false; btn.textContent = '✨ Categorizar com IA'; }
-    if (barWrap) setTimeout(function() { barWrap.style.display = 'none'; }, 1000);
+    _iaEsconderBarra();
     if (!window._iaChamadoPorBootstrap && typeof renderImportPreview === 'function') {
       renderImportPreview(window.importParsedRows);
     }
     return;
   }
+
+  // Progresso — só mostra se há itens para processar com IA
+  var barWrap = document.getElementById('iaProgressWrap');
+  var bar = document.getElementById('iaProgressBar');
+  var barLabel = document.getElementById('iaProgressLabel');
+  if (barWrap) barWrap.style.display = 'flex';
 
   var total = rows.length;
   var processados = 0;
@@ -309,7 +316,7 @@ async function iaCategorizarImportacao() {
       // Se erro de autenticação, para o loop imediatamente
       if (e.message && (e.message.includes('401') || e.message.includes('403'))) {
         if (btn) { btn.disabled = false; btn.textContent = '✨ Categorizar com IA'; }
-        if (barWrap) barWrap.style.display = 'none';
+        _iaEsconderBarra();
         break;
       }
     }
@@ -320,7 +327,7 @@ async function iaCategorizarImportacao() {
   }
 
   if (btn) { btn.disabled = false; btn.textContent = '✨ Categorizar com IA'; }
-  if (barWrap) setTimeout(function() { barWrap.style.display = 'none'; }, 1500);
+  _iaEsconderBarra();
 
   // Fallback: lançamentos que a IA não identificou → Gastos Variáveis / Não identificado
   var CAT_FALLBACK = 'Gastos Variáveis';
