@@ -708,14 +708,9 @@ function renderTable(tbodyId, items) {
 }
 
 function toggleStatusLanc(id, novoStatus) {
-  // Atualiza o cache atomicamente — lê o estado ATUAL antes de escrever
-  _memCache.lancamentos = (_memCache.lancamentos || []).map(
-    l => String(l.id) === String(id) ? { ...l, status: novoStatus } : l
-  );
-  dbUpdateLancamento(id, { status: novoStatus }).catch(function(e) {
-    console.error('[toggleStatusLanc]', e.message);
-  });
-  _scheduleRender();
+  dbUpdateLancamento(id, { status: novoStatus })
+    .then(function() { return carregarApp(); })
+    .catch(function(e) { console.error('[toggleStatusLanc]', e.message); });
 }
 
 function editLancamento(id) { openModal(id); }
@@ -865,11 +860,22 @@ function smartDelete(idOrBtn, groupId, e, recorrHint) {
   }
 }
 
+var _deletingLancIds = new Set();
+
 async function deleteLancamento(id) {
+  if (_deletingLancIds.has(String(id))) return;
   if (!await _showSimpleConfirm('🗑 Excluir', 'Excluir este lançamento?', 'Excluir', 'var(--red)')) return;
-  _addTombstone(id);
-  await dbDeleteLancamento(id);
-  await carregarApp();
+  _deletingLancIds.add(String(id));
+  try {
+    _addTombstone(id);
+    await dbDeleteLancamento(id);
+    await carregarApp();
+  } catch(e) {
+    console.error('[deleteLancamento]', e.message);
+    alert('Erro ao excluir. Tente novamente.');
+  } finally {
+    _deletingLancIds.delete(String(id));
+  }
 }
 
 function deleteGroup(groupId, itemId, e) {
@@ -918,8 +924,7 @@ function deleteGroup(groupId, itemId, e) {
           }
         } catch(e) { console.warn('[deleteGroup] erro banco:', e.message); }
       })();
-      safeRender(() => renderAll());
-      setTimeout(function() { if (typeof renderTerceirosTab === 'function') renderTerceirosTab(); }, 100);
+      carregarApp();
     });
   } else if (isParcelado) {
     const parcelGroups = {};
@@ -956,8 +961,7 @@ function deleteGroup(groupId, itemId, e) {
           }
         } catch(e) { console.warn('[deleteGroup] erro banco:', e.message); }
       })();
-      safeRender(() => renderAll());
-      setTimeout(function() { if (typeof renderTerceirosTab === 'function') renderTerceirosTab(); }, 100);
+      carregarApp();
     });
   } else {
     const groupItems = allData.filter(function(l) { return String(l.groupId) === String(groupId); });
@@ -984,8 +988,7 @@ function deleteGroup(groupId, itemId, e) {
           }
         } catch(e) { console.warn('[deleteGroup] erro banco:', e.message); }
       })();
-      safeRender(() => renderAll());
-      setTimeout(function() { if (typeof renderTerceirosTab === 'function') renderTerceirosTab(); }, 100);
+      carregarApp();
     });
   }
 }

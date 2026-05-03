@@ -1482,143 +1482,146 @@ function setTipo(t) {
   _filterCatsByTipo(t);
 }
 
-function salvarLancamento() {
-  // salvarLancamento dispara operação async mas não precisa ser awaited pelo caller (onclick)
-  _salvarLancamentoAsync().catch(function(e) {
-    console.error('[salvarLancamento]', e.message);
-  });
-}
+async function salvarLancamento() {
+  const _btn = document.querySelector('button[onclick="salvarLancamento()"]');
+  if (_btn && _btn.disabled) return;
+  if (_btn) { _btn.disabled = true; _btn.textContent = 'Salvando...'; }
+  try {
+    let erros = [];
+    if (!tipoAtual) { document.getElementById('tipoError').style.display = 'block'; erros.push('tipo'); }
+    else { document.getElementById('tipoError').style.display = 'none'; }
 
-async function _salvarLancamentoAsync() {
-  let erros = [];
-  if (!tipoAtual) { document.getElementById('tipoError').style.display = 'block'; erros.push('tipo'); }
-  else { document.getElementById('tipoError').style.display = 'none'; }
+    const _fData  = document.getElementById('fData').value;
+    const _fVenc  = document.getElementById('fVencimento').value;
+    const _fValor = document.getElementById('fValor').value;
+    const _fDesc  = document.getElementById('fDesc').value.trim();
+    const _fCat   = document.getElementById('fCategoria').value;
+    const _fBanco = document.getElementById('fBanco')?.value || '';
 
-  const _fData  = document.getElementById('fData').value;
-  const _fVenc  = document.getElementById('fVencimento').value;
-  const _fValor = document.getElementById('fValor').value;
-  const _fDesc  = document.getElementById('fDesc').value.trim();
-  const _fCat   = document.getElementById('fCategoria').value;
-  const _fBanco = document.getElementById('fBanco')?.value || '';
+    if (!_fData)  { erros.push('data');  highlightRequired('fData'); }  else clearRequired('fData');
+    if (!_fVenc)  { erros.push('venc');  highlightRequired('fVencimento'); } else clearRequired('fVencimento');
+    if (!_fValor || parseBRL(_fValor) <= 0) { erros.push('valor'); highlightRequired('fValor'); } else clearRequired('fValor');
+    if (!_fDesc)  { erros.push('desc');  highlightRequired('fDesc'); }  else clearRequired('fDesc');
+    if (!_fCat)   { erros.push('cat');   highlightRequired('fCategoria'); } else clearRequired('fCategoria');
+    if (!_fBanco) { erros.push('banco'); highlightRequired('fBanco'); }  else clearRequired('fBanco');
+    if (erros.length > 0) return;
 
-  if (!_fData)  { erros.push('data');  highlightRequired('fData'); }  else clearRequired('fData');
-  if (!_fVenc)  { erros.push('venc');  highlightRequired('fVencimento'); } else clearRequired('fVencimento');
-  if (!_fValor || parseBRL(_fValor) <= 0) { erros.push('valor'); highlightRequired('fValor'); } else clearRequired('fValor');
-  if (!_fDesc)  { erros.push('desc');  highlightRequired('fDesc'); }  else clearRequired('fDesc');
-  if (!_fCat)   { erros.push('cat');   highlightRequired('fCategoria'); } else clearRequired('fCategoria');
-  if (!_fBanco) { erros.push('banco'); highlightRequired('fBanco'); }  else clearRequired('fBanco');
-  if (erros.length > 0) return;
-
-  const data = loadData();
-  const dataBase = _fData;
-  const vencInput = document.getElementById('fVencimento').value;
-  let vencimento = vencInput ? inputDateToVenc(vencInput) : '';
-  const _existingRec = editId !== null ? (data.find(x => String(x.id) === String(editId)) || null) : null;
-  if (!vencimento) {
-    if (_existingRec && _existingRec.vencimento) vencimento = _existingRec.vencimento;
-    if (!vencimento && document.getElementById('fData').value) {
-      vencimento = inputDateToVenc(document.getElementById('fData').value);
-    }
-  }
-  let valorTotal = parseBRL(document.getElementById('fValor').value) || 0;
-  if (!valorTotal && _existingRec && _existingRec.valor) valorTotal = Math.abs(_existingRec.valor);
-  const desc = document.getElementById('fDesc').value || '—';
-  const categoria = document.getElementById('fCategoria').value || 'Outros';
-  const subCategoria = document.getElementById('fSubCategoria').value || '';
-  const status = document.getElementById('fStatus').value;
-  const pagamento = document.getElementById('fPagamento').value || '';
-  const tipoLanc = document.getElementById('fTipoLanc').value || 'variavel';
-  const terceiro = document.getElementById('fTerceiro')?.value || '';
-  const banco = document.getElementById('fBanco')?.value || '';
-
-  function mesAno(dateStr, venc) {
-    if (venc) { const p = venc.split('/'); if (p.length === 3) return { mes: parseInt(p[1]), ano: parseInt(p[2]) }; }
-    const cartaoConf = _getCartaoConfig(pagamento);
-    if (cartaoConf && cartaoConf.diaCorte && !venc) return mesAnoComCorte(dateStr, pagamento);
-    return { mes: parseInt(dateStr.split('-')[1]), ano: parseInt(dateStr.split('-')[0]) };
-  }
-
-  if (desc && desc !== '—' && categoria) {
-    if (typeof learnCat === 'function') learnCat(desc, categoria);
-    if (subCategoria && typeof learnSub === 'function') learnSub(desc, categoria, subCategoria);
-  }
-
-  if (editId !== null) {
-    if (tipoLanc === 'parcelado') {
-      const existing = data.find(x => String(x.id) === String(editId));
-      if (existing && existing.groupId) {
-        const _nParcelasPending = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 2);
-        window._pendingEditData = { tipoLanc, tipoAtual, dataBase, valorTotal, desc, categoria, subCategoria, status, pagamento, vencimento, banco, terceiro, nParcelasPending: _nParcelasPending };
-        document.getElementById('editScopeOverlay').style.display = 'flex';
-        return;
+    const data = loadData();
+    const dataBase = _fData;
+    const vencInput = document.getElementById('fVencimento').value;
+    let vencimento = vencInput ? inputDateToVenc(vencInput) : '';
+    const _existingRec = editId !== null ? (data.find(x => String(x.id) === String(editId)) || null) : null;
+    if (!vencimento) {
+      if (_existingRec && _existingRec.vencimento) vencimento = _existingRec.vencimento;
+      if (!vencimento && document.getElementById('fData').value) {
+        vencimento = inputDateToVenc(document.getElementById('fData').value);
       }
     }
-    if (tipoLanc === 'fixo') {
-      const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
+    let valorTotal = parseBRL(document.getElementById('fValor').value) || 0;
+    if (!valorTotal && _existingRec && _existingRec.valor) valorTotal = Math.abs(_existingRec.valor);
+    const desc = document.getElementById('fDesc').value || '—';
+    const categoria = document.getElementById('fCategoria').value || 'Outros';
+    const subCategoria = document.getElementById('fSubCategoria').value || '';
+    const status = document.getElementById('fStatus').value;
+    const pagamento = document.getElementById('fPagamento').value || '';
+    const tipoLanc = document.getElementById('fTipoLanc').value || 'variavel';
+    const terceiro = document.getElementById('fTerceiro')?.value || '';
+    const banco = document.getElementById('fBanco')?.value || '';
+
+    function mesAno(dateStr, venc) {
+      if (venc) { const p = venc.split('/'); if (p.length === 3) return { mes: parseInt(p[1]), ano: parseInt(p[2]) }; }
+      const cartaoConf = _getCartaoConfig(pagamento);
+      if (cartaoConf && cartaoConf.diaCorte && !venc) return mesAnoComCorte(dateStr, pagamento);
+      return { mes: parseInt(dateStr.split('-')[1]), ano: parseInt(dateStr.split('-')[0]) };
+    }
+
+    if (desc && desc !== '—' && categoria) {
+      if (typeof learnCat === 'function') learnCat(desc, categoria);
+      if (subCategoria && typeof learnSub === 'function') learnSub(desc, categoria, subCategoria);
+    }
+
+    if (editId !== null) {
+      if (tipoLanc === 'parcelado') {
+        const existing = data.find(x => String(x.id) === String(editId));
+        if (existing && existing.groupId) {
+          const _nParcelasPending = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 2);
+          window._pendingEditData = { tipoLanc, tipoAtual, dataBase, valorTotal, desc, categoria, subCategoria, status, pagamento, vencimento, banco, terceiro, nParcelasPending: _nParcelasPending };
+          document.getElementById('editScopeOverlay').style.display = 'flex';
+          return;
+        }
+      }
+      if (tipoLanc === 'fixo') {
+        const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
+        const groupId = Date.now();
+        const existing = data.find(x => String(x.id) === String(editId));
+        const removedIds = existing && existing.groupId
+          ? data.filter(x => String(x.groupId) === String(existing.groupId)).map(x => String(x.id))
+          : [String(editId)];
+        const newItems = [];
+        for (let i = 0; i < n; i++) {
+          const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
+          const ma = mesAno(dataBase, vp);
+          newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n });
+        }
+        for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
+        await dbSaveLancamentos(newItems);
+      } else {
+        const existing = data.find(x => String(x.id) === String(editId));
+        const nParc = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 1);
+        if (tipoLanc === 'parcelado' && nParc > 1) {
+          const parcela = Math.round((valorTotal / nParc) * 100) / 100;
+          const groupId = Date.now();
+          const newItems = [];
+          for (let i = 0; i < nParc; i++) {
+            const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
+            const ma = mesAno(dataBase, vp);
+            newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: nParc, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: nParc, _ts: groupId });
+          }
+          _addTombstone(String(editId));
+          await dbDeleteLancamento(String(editId));
+          await dbSaveLancamentos(newItems);
+        } else {
+          const ma = mesAno(dataBase, vencimento);
+          const l = { ...existing, id: editId, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, banco, terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
+          await dbUpdateLancamento(editId, l);
+        }
+      }
+    } else if (recorrAtual === 'parcelado') {
+      const n = parseInt(document.getElementById('fParcelas').value) || 2;
+      const parcela = Math.round((valorTotal / n) * 100) / 100;
       const groupId = Date.now();
-      const existing = data.find(x => String(x.id) === String(editId));
-      const removedIds = existing && existing.groupId
-        ? data.filter(x => String(x.groupId) === String(existing.groupId)).map(x => String(x.id))
-        : [String(editId)];
       const newItems = [];
       for (let i = 0; i < n; i++) {
         const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
         const ma = mesAno(dataBase, vp);
-        newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n });
+        newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: n, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: n, _ts: groupId });
       }
-      for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
+      await dbSaveLancamentos(newItems);
+    } else if (recorrAtual === 'fixo') {
+      const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
+      const groupId = Date.now();
+      const newItems = [];
+      for (let i = 0; i < n; i++) {
+        const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
+        const ma = mesAno(dataBase, vp);
+        newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc: 'fixo', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n, _ts: groupId });
+      }
       await dbSaveLancamentos(newItems);
     } else {
-      const existing = data.find(x => String(x.id) === String(editId));
-      const nParc = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 1);
-      if (tipoLanc === 'parcelado' && nParc > 1) {
-        const parcela = Math.round((valorTotal / nParc) * 100) / 100;
-        const groupId = Date.now();
-        const newItems = [];
-        for (let i = 0; i < nParc; i++) {
-          const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
-          const ma = mesAno(dataBase, vp);
-          newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: nParc, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: nParc, _ts: groupId });
-        }
-        _addTombstone(String(editId));
-        await dbDeleteLancamento(String(editId));
-        await dbSaveLancamentos(newItems);
-      } else {
-        const ma = mesAno(dataBase, vencimento);
-        const l = { ...existing, id: editId, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, banco, terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
-        await dbUpdateLancamento(editId, l);
-      }
+      const ma = mesAno(dataBase, vencimento);
+      const _tsNow = Date.now();
+      const _novoLanc = { id: _tsNow, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, terceiro, banco, mes: ma.mes, ano: ma.ano, _ts: _tsNow };
+      await dbSaveLancamentos([_novoLanc]);
     }
-  } else if (recorrAtual === 'parcelado') {
-    const n = parseInt(document.getElementById('fParcelas').value) || 2;
-    const parcela = Math.round((valorTotal / n) * 100) / 100;
-    const groupId = Date.now();
-    const newItems = [];
-    for (let i = 0; i < n; i++) {
-      const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
-      const ma = mesAno(dataBase, vp);
-      newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: n, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: n, _ts: groupId });
-    }
-    await dbSaveLancamentos(newItems);
-  } else if (recorrAtual === 'fixo') {
-    const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
-    const groupId = Date.now();
-    const newItems = [];
-    for (let i = 0; i < n; i++) {
-      const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
-      const ma = mesAno(dataBase, vp);
-      newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc: 'fixo', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n, _ts: groupId });
-    }
-    await dbSaveLancamentos(newItems);
-  } else {
-    const ma = mesAno(dataBase, vencimento);
-    const _tsNow = Date.now();
-    const _novoLanc = { id: _tsNow, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, terceiro, banco, mes: ma.mes, ano: ma.ano, _ts: _tsNow };
-    await dbSaveLancamentos([_novoLanc]);
-  }
 
-  closeModal();
-  await carregarApp();
+    closeModal();
+    await carregarApp();
+  } catch(e) {
+    console.error('[salvarLancamento]', e.message);
+    alert('Erro ao salvar. Tente novamente.');
+  } finally {
+    if (_btn) { _btn.disabled = false; _btn.textContent = 'Salvar'; }
+  }
 }
 
 async function _editScopeChoice(scope) {
@@ -1628,35 +1631,38 @@ async function _editScopeChoice(scope) {
   const data = loadData();
   const existing = data.find(x => String(x.id) === String(editId));
   const n = d.nParcelasPending || parseInt(document.getElementById('fParcelas').value) || (existing?.totalParcelas || 2);
-
-  if (scope === 'single') {
-    const ma = { mes: parseInt(d.dataBase.split('-')[1]), ano: parseInt(d.dataBase.split('-')[0]) };
-    if (d.vencimento) {
-      const _vm = _parseVencMesAno(d.vencimento);
-      if (_vm) { ma.mes = _vm.mes; ma.ano = _vm.ano; }
+  try {
+    if (scope === 'single') {
+      const ma = { mes: parseInt(d.dataBase.split('-')[1]), ano: parseInt(d.dataBase.split('-')[0]) };
+      if (d.vencimento) {
+        const _vm = _parseVencMesAno(d.vencimento);
+        if (_vm) { ma.mes = _vm.mes; ma.ano = _vm.ano; }
+      }
+      const parcela = existing ? Math.abs(existing.valor) : Math.round((d.valorTotal / n) * 100) / 100;
+      const updatedItem = { ...existing, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
+      await dbUpdateLancamento(String(editId), updatedItem);
+    } else {
+      const parcela = Math.round((d.valorTotal / n) * 100) / 100;
+      const groupId = Date.now();
+      const removedIds = existing && existing.groupId
+        ? data.filter(x => String(x.groupId) === String(existing.groupId)).map(x => String(x.id))
+        : [String(editId)];
+      const newItems = [];
+      for (let i = 0; i < n; i++) {
+        const vp = d.vencimento ? addMonthsToVenc(d.vencimento, i) : '';
+        const mes = vp ? parseInt(vp.split('/')[1]) : parseInt(d.dataBase.split('-')[1]);
+        const ano = vp ? parseInt(vp.split('/')[2]) : parseInt(d.dataBase.split('-')[0]);
+        newItems.push({ id: groupId + i, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, parcAtual: i+1, parcTotal: n, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, tipoLanc: 'parcelado', vencimento: vp, banco: d.banco, terceiro: d.terceiro, mes, ano, groupId, recorr: 'parcelado', totalParcelas: n });
+      }
+      for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
+      await dbSaveLancamentos(newItems);
     }
-    const parcela = existing ? Math.abs(existing.valor) : Math.round((d.valorTotal / n) * 100) / 100;
-    const updatedItem = { ...existing, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
-    await dbUpdateLancamento(String(editId), updatedItem);
-  } else {
-    const parcela = Math.round((d.valorTotal / n) * 100) / 100;
-    const groupId = Date.now();
-    const removedIds = existing && existing.groupId
-      ? data.filter(x => String(x.groupId) === String(existing.groupId)).map(x => String(x.id))
-      : [String(editId)];
-    const newItems = [];
-    for (let i = 0; i < n; i++) {
-      const vp = d.vencimento ? addMonthsToVenc(d.vencimento, i) : '';
-      const mes = vp ? parseInt(vp.split('/')[1]) : parseInt(d.dataBase.split('-')[1]);
-      const ano = vp ? parseInt(vp.split('/')[2]) : parseInt(d.dataBase.split('-')[0]);
-      newItems.push({ id: groupId + i, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, parcAtual: i+1, parcTotal: n, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, tipoLanc: 'parcelado', vencimento: vp, banco: d.banco, terceiro: d.terceiro, mes, ano, groupId, recorr: 'parcelado', totalParcelas: n });
-    }
-    for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
-    await dbSaveLancamentos(newItems);
+    window._pendingEditData = null;
+    editId = null;
+    closeModal();
+    await carregarApp();
+  } catch(e) {
+    console.error('[_editScopeChoice]', e.message);
+    alert('Erro ao salvar. Tente novamente.');
   }
-
-  window._pendingEditData = null;
-  editId = null;
-  closeModal();
-  await carregarApp();
 }

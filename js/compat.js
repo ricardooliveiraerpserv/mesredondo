@@ -343,12 +343,14 @@ window._markLocalDirty = window._markLocalDirty || function() { /* no-op */ };
 // ── carregarApp — única entrada para (re)carregar dados e renderizar ─
 // Fluxo obrigatório: persistir → carregarApp → renderizar.
 // Supabase é a fonte de verdade; _memCache é apenas reflexo do banco.
+// Queue: se chamada chegar durante execução, uma re-execução é agendada no finally.
 window.carregarApp = async function() {
   if (window._carregarAppIsLoading) {
-    console.log('[carregarApp] chamada ignorada — já em andamento');
+    window._carregarAppPending = true;
     return;
   }
   window._carregarAppIsLoading = true;
+  window._carregarAppPending = false;
   try {
     _clearMemCache();
     if (typeof window._loadAllData === 'function') await window._loadAllData();
@@ -387,6 +389,11 @@ window.carregarApp = async function() {
     console.error('[carregarApp] erro:', e.message);
   } finally {
     window._carregarAppIsLoading = false;
+    // Executa a chamada que chegou enquanto estava carregando
+    if (window._carregarAppPending) {
+      window._carregarAppPending = false;
+      window.carregarApp();
+    }
   }
 };
 
