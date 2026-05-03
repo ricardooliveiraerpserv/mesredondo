@@ -587,9 +587,33 @@ function iaInjetarBotaoImport() {
 // Chamada pelo render.js após o parse do arquivo:
 // roda IA de categorização → depois renderiza → depois verifica duplicatas
 async function iaCategorizarERenderizar() {
-  // Auto-categorização desabilitada — use os botões manualmente
-  // Apenas injeta botões e renderiza o preview
   iaInjetarBotaoImport();
+
+  // Aplica índice de deletados antes de renderizar:
+  // recupera terceiro (e categoria/sub quando ausentes) de registros previamente excluídos
+  if (window.importParsedRows && importParsedRows.length) {
+    try {
+      var _dIdx = await _iaDeletedIndex();
+      if (Object.keys(_dIdx).length > 0) {
+        importParsedRows.forEach(function(r) {
+          var key = (r.desc || '').trim().toLowerCase();
+          var m = _dIdx[key];
+          if (!m) return;
+          // Categoria/sub: só preenche se ainda não tem nenhuma
+          if (!r.categoria && !r.xlsxCat && m.categoria) {
+            r.categoria    = m.categoria;
+            r.subCategoria = m.subCategoria;
+            r._iaFromDeleted = true;
+          }
+          // Terceiro: sempre recupera se o registro deletado tinha e o atual não tem
+          if (!r.terceiro && m.terceiro) {
+            r.terceiro = m.terceiro;
+          }
+        });
+      }
+    } catch(_e) { console.warn('[IA] iaCategorizarERenderizar: índice deletados erro', _e.message); }
+  }
+
   if (typeof renderImportPreview === 'function' && window.importParsedRows && window.importParsedRows.length) {
     renderImportPreview(window.importParsedRows);
   }
