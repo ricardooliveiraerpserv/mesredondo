@@ -103,8 +103,7 @@
               _state[selId] = st.size > 0 ? st : new Set();
             } else {
               st.add(v);
-              var allVals = opts.filter(function(o){ return o.value !== ''; }).map(function(o){ return o.value; });
-              _state[selId] = allVals.every(function(val){ return st.has(val); }) ? new Set() : st;
+              _state[selId] = st;
             }
           }
         }
@@ -531,26 +530,6 @@ function migrateParcelValues() {
   var parcStatusOpts = [{value:'',text:'Todos os status'},{value:'ativo',text:'Ativos'},{value:'quitado',text:'Quitados'}];
 
   function rb(selId){ return optsFromSelect(selId); }
-
-  FSEL.build('fsel-filtroTipo',          'filtroTipo',          tipoOpts,      function(){ renderAll(); });
-  FSEL.build('fsel-filtroStatus',        'filtroStatus',        statusOpts,    function(){ renderAll(); });
-  FSEL.build('fsel-filtroCategoria',     'filtroCategoria',     rb('filtroCategoria'), function(){ onFiltroCategChange(false); renderAll(); });
-  FSEL.build('fsel-filtroSubCategoria',  'filtroSubCategoria',  rb('filtroSubCategoria'), function(){ onFiltroSubCatChange(); });
-  FSEL.build('fsel-filtroSemCat',        'filtroSemCat',        [{value:'',text:'Todas classificações'},{value:'sem_cat',text:'⚠ Sem categoria'},{value:'sem_sub',text:'⚠ Sem sub-cat'}], function(){ renderAll(); });
-  FSEL.build('fsel-filtroTipoLanc',      'filtroTipoLanc',      tipoLancOpts,  function(){ renderAll(); });
-  FSEL.build('fsel-filtroPagamento',     'filtroPagamento',     rb('filtroPagamento'), function(){ renderAll(); });
-  FSEL.build('fsel-filtroTerceiro',      'filtroTerceiro',      rb('filtroTerceiro'),  function(){ renderAll(); });
-  FSEL.build('fsel-filtroBanco',         'filtroBanco',         rb('filtroBanco'),     function(){ renderAll(); });
-
-  // Terceiros
-  var tipoOpts = [{value:'',text:'Todos os tipos'},{value:'receita',text:'Receita'},{value:'despesa',text:'Despesa'}];
-  var statusOpts = [{value:'',text:'Todos os status'},{value:'pago',text:'✓ Pago/Recebido'},{value:'pendente',text:'⏳ Pendente'}];
-  var tipoLancOpts = [{value:'',text:'Todos os lançamentos'},{value:'variavel',text:'📦 Variável'},{value:'parcelado',text:'⊞ Parcelado'},{value:'fixo',text:'↻ Fixo'}];
-  var tercTipoOpts = [{value:'',text:'Entradas e Dívidas'},{value:'entrada',text:'Entradas'},{value:'divida',text:'Dívidas'}];
-  var vencTipoOpts = [{value:'',text:'Todas as situações'},{value:'atrasado',text:'🔴 Atrasados'},{value:'hoje',text:'🟡 Vencem hoje'},{value:'proximos',text:'🔵 Próximos 7 dias'},{value:'mes',text:'📅 Restante do mês'}];
-  var parcTipoOpts = [{value:'',text:'Todos os tipos'},{value:'parcelado',text:'🔢 Parcelados'},{value:'fixo',text:'🔁 Fixos'}];
-  var parcStatusOpts = [{value:'',text:'Todos os status'},{value:'ativo',text:'Ativos'},{value:'quitado',text:'Quitados'}];
-  function rb(selId){ return Array.from((document.getElementById(selId)||{options:[]}).options).map(function(o){return {value:o.value,text:o.text};}); }
 
   // Lançamentos
   FSEL.build('fsel-filtroTipo','filtroTipo',tipoOpts,function(){renderAll();});
