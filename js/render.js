@@ -127,6 +127,36 @@ function restoreScrollContext(ctx) {
 }
 
 // Envolve qualquer função de render preservando o contexto de scroll.
+// ── normalizarData — única fonte de conversão de datas no app ────────
+// Aceita YYYY-MM-DD, DD/MM/YYYY ou objeto Date. Devolve YYYY-MM-DD.
+function normalizarData(d) {
+  if (!d) return '';
+  if (d instanceof Date) return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+  var s = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { var p = s.split('/'); return p[2] + '-' + p[1] + '-' + p[0]; }
+  var parsed = new Date(s);
+  return isNaN(parsed) ? '' : parsed.toISOString().slice(0, 10);
+}
+
+// ── _scheduleRender — debounce de renderAll para evitar renders duplos ─
+var _renderTimer = null;
+function _scheduleRender() {
+  if (_renderTimer) clearTimeout(_renderTimer);
+  _renderTimer = setTimeout(function() {
+    _renderTimer = null;
+    renderAll();
+    try {
+      var _activeTab = document.querySelector('.tab-content.active');
+      var _tab = _activeTab ? _activeTab.id.replace('tab-', '') : '';
+      if (_tab === 'terceiros'  && typeof renderTerceirosTab  === 'function') renderTerceirosTab();
+      if (_tab === 'parcelados' && typeof renderParceladosTab === 'function') renderParceladosTab();
+      if (_tab === 'vencimentos'&& typeof renderVencimentosTab=== 'function') renderVencimentosTab();
+      if (_tab === 'cartoes'    && typeof renderCartoesTab    === 'function') renderCartoesTab();
+    } catch(e) {}
+  }, 0);
+}
+
 // Usa requestAnimationFrame para restaurar após o DOM ser atualizado.
 function safeRender(fn) {
   const ctx = getScrollContext();
@@ -678,18 +708,14 @@ function renderTable(tbodyId, items) {
 }
 
 function toggleStatusLanc(id, novoStatus) {
-  const all = loadData();
-  const upd = all.map(l => String(l.id) === String(id) ? { ...l, status: novoStatus } : l);
-  _memCache.lancamentos = upd;
+  // Atualiza o cache atomicamente — lê o estado ATUAL antes de escrever
+  _memCache.lancamentos = (_memCache.lancamentos || []).map(
+    l => String(l.id) === String(id) ? { ...l, status: novoStatus } : l
+  );
   dbUpdateLancamento(id, { status: novoStatus }).catch(function(e) {
     console.error('[toggleStatusLanc]', e.message);
   });
-  safeRender(() => renderAll());
-  // Atualiza abas que listam pendentes
-  const vencTab = document.getElementById('tab-vencimentos');
-  if (vencTab && vencTab.classList.contains('active')) renderVencimentosTab();
-  // Atualiza aba Terceiros
-  if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
+  _scheduleRender();
 }
 
 function editLancamento(id) { openModal(id); }
@@ -841,20 +867,13 @@ function smartDelete(idOrBtn, groupId, e, recorrHint) {
 
 async function deleteLancamento(id) {
   if (!await _showSimpleConfirm('🗑 Excluir', 'Excluir este lançamento?', 'Excluir', 'var(--red)')) return;
+  // Lê o estado ATUAL do cache no momento da confirmação (não antes)
+  const filtered = loadData().filter(l => String(l.id) !== String(id));
   _addTombstone(id);
-  await saveData((await loadData()).filter(l => String(l.id) !== String(id)));
-  if (typeof dbDeleteLancamento === 'function') {
-    dbDeleteLancamento(id).catch(function(e) {
-      console.warn('[deleteLancamento] erro no banco:', e.message);
-    });
-  }
-  safeRender(() => renderAll());
-  setTimeout(function() {
-    if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
-    if (typeof renderCartoesTab === 'function') renderCartoesTab();
-    if (typeof renderParceladosTab === 'function') renderParceladosTab();
-    if (typeof renderVencimentosTab === 'function') renderVencimentosTab();
-  }, 100);
+  // saveData: (1) atualiza _memCache sincronamente, (2) chama dbDeleteLancamento internamente
+  // NÃO chamar dbDeleteLancamento aqui separado — saveData já faz isso
+  saveData(filtered);
+  _scheduleRender();
 }
 
 function deleteGroup(groupId, itemId, e) {
@@ -1403,10 +1422,20 @@ function renderAllTable() {
   // Popula filtro de terceiro dinamicamente
   const tercSel = document.getElementById('filtroTerceiro');
   if (tercSel) {
+    const tercsAtivos = new Set(all.map(l=>l.terceiro).filter(Boolean));
     tercSel.innerHTML = '<option value="">— Todos os terceiros —</option>';
-    [...new Set(all.map(l=>l.terceiro).filter(Boolean))].sort()
-      .forEach(t => { const o=document.createElement('option');o.value=t;o.textContent=t;tercSel.appendChild(o); });
-    if(window.FSEL) _fselRebuild('filtroTerceiro');
+    [...tercsAtivos].sort().forEach(t => {
+      const o = document.createElement('option'); o.value = t; o.textContent = t; tercSel.appendChild(o);
+    });
+    if (window.FSEL) {
+      // Se a seleção atual tem valores que não existem mais nos dados do mês,
+      // limpa o filtro para evitar que todos os registros sumam silenciosamente
+      const selAtual = FSEL.getValues('filtroTerceiro');
+      if (selAtual.length && !selAtual.every(v => tercsAtivos.has(v))) {
+        FSEL.reset('filtroTerceiro');
+      }
+      _fselRebuild('filtroTerceiro');
+    }
   }
 
   let filtered = all.filter(l => {

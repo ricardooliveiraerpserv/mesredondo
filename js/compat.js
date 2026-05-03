@@ -340,6 +340,39 @@ window.calcSaldoBancoId = function(bancoId) {
 window._sbAutoSync = window._sbAutoSync || function() { /* no-op: saves diretos ao banco */ };
 window._markLocalDirty = window._markLocalDirty || function() { /* no-op */ };
 
+// ── carregarApp — única entrada para (re)carregar dados e renderizar ─
+// Chamada em: login, sbLoad, e qualquer ponto que precise de dados frescos.
+// Guard: não executa se já houver carregamento em andamento.
+window.carregarApp = async function() {
+  if (window._carregarAppEmAndamento) {
+    console.log('[carregarApp] chamada ignorada — já em andamento');
+    return;
+  }
+  window._carregarAppEmAndamento = true;
+  try {
+    _clearMemCache();
+    if (typeof window._loadAllData === 'function') await window._loadAllData();
+    // Sincroniza _rangeFilter com currentMonth/currentYear para evitar dessincronismo
+    if (!window._rangeFilter) {
+      window._rangeFilter = {
+        de:  { mes: currentMonth, ano: currentYear },
+        ate: { mes: currentMonth, ano: currentYear }
+      };
+    }
+    if (typeof renderAll === 'function') renderAll();
+    try {
+      if (typeof renderTerceirosTab  === 'function') renderTerceirosTab();
+      if (typeof renderParceladosTab === 'function') renderParceladosTab();
+      if (typeof renderVencimentosTab=== 'function') renderVencimentosTab();
+      if (typeof renderCartoesTab    === 'function') renderCartoesTab();
+    } catch(e) {}
+  } catch(e) {
+    console.error('[carregarApp] erro:', e.message);
+  } finally {
+    window._carregarAppEmAndamento = false;
+  }
+};
+
 // ── Carregamento inicial dos dados após login ─────────────────────────
 // Chamado por _onLogin() em sync-auth.js após autenticação
 window._loadAllData = async function() {

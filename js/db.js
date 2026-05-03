@@ -189,16 +189,13 @@ async function dbUpdateLancamento(id, fields) {
 
 async function dbDeleteLancamento(id) {
   const uid = _uid();
-  // Remove do cache imediatamente — UI responde sem esperar a rede
-  if (_memCache.lancamentos) {
-    _memCache.lancamentos = _memCache.lancamentos.filter(l => String(l.id) !== String(id));
-  }
+  // Não mutar _memCache aqui — saveData já removeu o registro de forma síncrona
+  // antes de chamar esta função. Mutação assíncrona aqui causaria race condition.
   const path = 'mf_lancamentos?id=eq.' + encodeURIComponent(id) + '&user_id=eq.' + uid;
   try {
     await _dbFetch(path, 'PATCH', { deleted: true });
     console.log('[DB] deleteLancamento (soft) OK:', id);
   } catch (e) {
-    // Falhou agora → enfileira para retry automático no próximo flush
     _addPending({ path, method: 'PATCH', body: { deleted: true } });
     console.warn('[DB] deleteLancamento enfileirado para retry:', id, e.message);
   }

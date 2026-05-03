@@ -1579,9 +1579,11 @@ function salvarLancamento() {
       } else {
         const ma = mesAno(dataBase, vencimento);
         const l = { ...existing, id: editId, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, banco, terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
-        const idx = data.findIndex(x => String(x.id) === String(editId));
-        data[idx] = l;
-        _memCache.lancamentos = data;
+        // Lê o estado ATUAL do cache (não o snapshot antigo capturado no início da função)
+        // para não sobrescrever mudanças feitas por operações intermediárias
+        _memCache.lancamentos = (_memCache.lancamentos || []).map(
+          x => String(x.id) === String(editId) ? l : x
+        );
         console.log('[salvarLancamento] editando lançamento único:', editId, l.desc, l.valor);
         dbUpdateLancamento(editId, l).catch(function(e) {
           console.error('[salvarLancamento:update]', e.message);
@@ -1617,17 +1619,22 @@ function salvarLancamento() {
   }
 
   closeModal();
-  safeRender(() => {
-    renderAll();
-    setTimeout(function() {
-      if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
-      if (typeof renderCartoesTab === 'function') renderCartoesTab();
-      if (typeof renderParceladosTab === 'function') renderParceladosTab();
-      if (typeof renderVencimentosTab === 'function') renderVencimentosTab();
-      if (typeof renderAReceberTab === 'function') renderAReceberTab();
-      if (typeof renderAPagarTab === 'function') renderAPagarTab();
-    }, 100);
-  });
+  // Usa _scheduleRender para evitar múltiplos renders disparados por saveData + safeRender
+  if (typeof _scheduleRender === 'function') {
+    _scheduleRender();
+  } else {
+    safeRender(() => {
+      renderAll();
+      setTimeout(function() {
+        if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
+        if (typeof renderCartoesTab === 'function') renderCartoesTab();
+        if (typeof renderParceladosTab === 'function') renderParceladosTab();
+        if (typeof renderVencimentosTab === 'function') renderVencimentosTab();
+        if (typeof renderAReceberTab === 'function') renderAReceberTab();
+        if (typeof renderAPagarTab === 'function') renderAPagarTab();
+      }, 100);
+    });
+  }
 }
 
 function _editScopeChoice(scope) {
@@ -1646,17 +1653,15 @@ function _editScopeChoice(scope) {
     }
     const existingItem = data.find(x => String(x.id) === String(editId));
     const parcela = existingItem ? Math.abs(existingItem.valor) : Math.round((d.valorTotal / n) * 100) / 100;
-    const idx = data.findIndex(x => String(x.id) === String(editId));
-    if (idx !== -1) {
-      data[idx] = { ...data[idx], tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
-      // saveData não atualiza itens com ID já existente — persiste diretamente no Supabase
-      console.log('[editScopeChoice:single] persistindo update', editId);
-      dbUpdateLancamento(String(editId), data[idx]).catch(function(e) {
-        console.warn('[editScopeChoice:single:update]', e.message);
-      });
-    }
-    // Atualiza cache diretamente (saveData apenas insere novos, não atualiza existentes)
-    _memCache.lancamentos = data;
+    const updatedItem = { ...existingItem, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
+    // Lê o estado ATUAL do cache para não sobrescrever mudanças intermediárias
+    _memCache.lancamentos = (_memCache.lancamentos || []).map(
+      x => String(x.id) === String(editId) ? updatedItem : x
+    );
+    console.log('[editScopeChoice:single] persistindo update', editId);
+    dbUpdateLancamento(String(editId), updatedItem).catch(function(e) {
+      console.warn('[editScopeChoice:single:update]', e.message);
+    });
   } else {
     const parcela = Math.round((d.valorTotal / n) * 100) / 100;
     const groupId = Date.now();
