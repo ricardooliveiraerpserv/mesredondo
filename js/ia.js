@@ -57,12 +57,15 @@ var _iaRequestRunning = false;
 async function _iaChamar(prompt) {
   if (_iaRequestRunning) { console.warn('[IA] Já em execução'); return ''; }
   _iaRequestRunning = true;
+  const ctrl = new AbortController();
+  const _timeout = setTimeout(function() { ctrl.abort(); }, 25000);
   try {
     if (window._iaStopVerificacao) throw new Error('STOPPED');
     const res = await fetch(IA_CONFIG.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt }),
+      signal: ctrl.signal
     });
     if (!res.ok) {
       console.error('[IA] HTTP:', res.status);
@@ -75,9 +78,10 @@ async function _iaChamar(prompt) {
     const data = await res.json();
     return data.text || (data.content && data.content[0] && data.content[0].text) || '';
   } catch(e) {
-    console.error('[IA] Erro:', e.message);
+    console.error('[IA] Erro:', e.name === 'AbortError' ? 'TIMEOUT (25s)' : e.message);
     throw e;
   } finally {
+    clearTimeout(_timeout);
     _iaRequestRunning = false;
   }
 }
@@ -422,69 +426,70 @@ async function iaVerificarDuplicatas() {
   var LOTE = 10; // lotes menores para análise semântica
 
   window._iaStopVerificacao = false;
-  for (var i = 0; i < candidatos.length; i += LOTE) {
-    if (window._iaStopVerificacao) break;
-    var lote = candidatos.slice(i, i + LOTE);
+  try {
+    for (var i = 0; i < candidatos.length; i += LOTE) {
+      if (window._iaStopVerificacao) break;
+      var lote = candidatos.slice(i, i + LOTE);
 
-    var items = lote.map(function(r, idx) {
-      return idx + '. desc="' + (r.desc || r.descRaw) + '" valor=' + (r.value||0).toFixed(2) + ' data=' + (r.date||'');
-    }).join('\n');
+      var items = lote.map(function(r, idx) {
+        return idx + '. desc="' + (r.desc || r.descRaw) + '" valor=' + (r.value||0).toFixed(2) + ' data=' + (r.date||'');
+      }).join('\n');
 
-    var histStr = historico.map(function(h) {
-      return 'desc="' + h.desc + '" valor=' + (h.valor||0).toFixed(2) + ' data=' + h.data;
-    }).join('\n');
+      var histStr = historico.map(function(h) {
+        return 'desc="' + h.desc + '" valor=' + (h.valor||0).toFixed(2) + ' data=' + h.data;
+      }).join('\n');
 
-    var prompt = [
-      'Você é um assistente financeiro especialista em detectar lançamentos duplicados.',
-      'Analise se algum dos itens abaixo já existe no histórico do usuário considerando:',
-      '- FIXOS MENSAIS: mesmo serviço recorrente (Netflix, Spotify, academia, seguro, assinatura) com qualquer data = DUPLICATA',
-      '- Mesmo estabelecimento com descrição levemente diferente (ex: "NETFLIX" vs "Netflix Entretenimento", "UBER *TRIP" vs "Uber")',
-      '- Variações de banco: prefixos como "PG*", "MP*", "NF*", "PIX*", "EBN*", asteriscos, códigos numéricos no fim',
-      '- Mesmo valor no mesmo mês com descrição parecida',
-      '',
-      'Histórico de lançamentos existentes (desc | valor | data):',
-      histStr,
-      '',
-      'Itens a verificar:',
-      items,
-      '',
-      'Responda APENAS com JSON array. Para cada item diga se é duplicata e motivo CURTO.',
-      'Formato: [{"i":0,"duplicata":true,"motivo":"Netflix já lançado como fixo mensal"},...]',
-      'Se não for duplicata: {"i":0,"duplicata":false,"motivo":""}',
-      'Marque como duplicata se certeza > 80%. Prefira marcar demais a deixar passar.'
-    ].join('\n');
+      var prompt = [
+        'Você é um assistente financeiro especialista em detectar lançamentos duplicados.',
+        'Analise se algum dos itens abaixo já existe no histórico do usuário considerando:',
+        '- FIXOS MENSAIS: mesmo serviço recorrente (Netflix, Spotify, academia, seguro, assinatura) com qualquer data = DUPLICATA',
+        '- Mesmo estabelecimento com descrição levemente diferente (ex: "NETFLIX" vs "Netflix Entretenimento", "UBER *TRIP" vs "Uber")',
+        '- Variações de banco: prefixos como "PG*", "MP*", "NF*", "PIX*", "EBN*", asteriscos, códigos numéricos no fim',
+        '- Mesmo valor no mesmo mês com descrição parecida',
+        '',
+        'Histórico de lançamentos existentes (desc | valor | data):',
+        histStr,
+        '',
+        'Itens a verificar:',
+        items,
+        '',
+        'Responda APENAS com JSON array. Para cada item diga se é duplicata e motivo CURTO.',
+        'Formato: [{"i":0,"duplicata":true,"motivo":"Netflix já lançado como fixo mensal"},...]',
+        'Se não for duplicata: {"i":0,"duplicata":false,"motivo":""}',
+        'Marque como duplicata se certeza > 80%. Prefira marcar demais a deixar passar.'
+      ].join('\n');
 
-    try {
-      var raw = await _iaChamar(prompt);
-      var clean = raw.replace(/```json|```/g, '').trim();
-      var resultados = JSON.parse(clean);
-      resultados.forEach(function(res) {
-        var row = lote[res.i];
-        if (!row) return;
-        row._iaDupChecked = true;
-        if (res.duplicata) {
-          row._iaDupSemantic = true;
-          row._iaDupMotivo = res.motivo || 'Possível duplicata detectada pela IA';
-          dupCount++;
+      try {
+        var raw = await _iaChamar(prompt);
+        var clean = raw.replace(/```json|```/g, '').trim();
+        var resultados = JSON.parse(clean);
+        resultados.forEach(function(res) {
+          var row = lote[res.i];
+          if (!row) return;
+          row._iaDupChecked = true;
+          if (res.duplicata) {
+            row._iaDupSemantic = true;
+            row._iaDupMotivo = res.motivo || 'Possível duplicata detectada pela IA';
+            dupCount++;
+          }
+        });
+      } catch(e) {
+        console.warn('[IA] Erro ao verificar duplicatas lote', i, e.message);
+        // Erro de autenticação ou timeout → para imediatamente
+        if (e.message && (e.message.includes('401') || e.message.includes('403') || e.name === 'AbortError')) {
+          break;
         }
-      });
-    } catch(e) {
-      console.warn('[IA] Erro ao verificar duplicatas lote', i, e.message);
-      // Se erro de autenticação, para o loop imediatamente
-      if (e.message && (e.message.includes('401') || e.message.includes('403'))) {
-        if (btn) { btn.disabled = false; btn.textContent = '🔍 Duplicatas IA'; }
-        if (barWrap) barWrap.style.display = 'none';
-        break;
       }
+
+      processados = Math.min(i + LOTE, total);
+      if (bar) bar.style.width = Math.round(processados / total * 100) + '%';
+      if (barLabel) barLabel.textContent = processados + ' / ' + total;
     }
-
-    processados = Math.min(i + LOTE, total);
-    if (bar) bar.style.width = Math.round(processados / total * 100) + '%';
-    if (barLabel) barLabel.textContent = processados + ' / ' + total;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Duplicatas IA'; }
+    var _w = document.getElementById('iaProgressWrap');
+    if (_w) _w.style.display = 'none';
   }
-
-  if (btn) { btn.disabled = false; btn.textContent = '🔍 Duplicatas IA'; }
-  if (barWrap) setTimeout(function() { barWrap.style.display = 'none'; }, 1500);
 
   // Notifica resultado
   if (dupCount > 0) {
