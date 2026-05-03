@@ -491,13 +491,13 @@ async function iaVerificarDuplicatas() {
     if (_w) _w.style.display = 'none';
   }
 
-  // Notifica resultado
+  // Re-renderiza para mostrar os alertas visuais (apenas se houve alguma duplicata detectada)
   if (dupCount > 0) {
     console.log('[IA] ' + dupCount + ' possível(is) duplicata(s) semântica(s) encontrada(s)');
+    if (typeof renderImportPreview === 'function' && importParsedRows && importParsedRows.length) {
+      renderImportPreview(importParsedRows);
+    }
   }
-
-  // Re-renderiza para mostrar os alertas visuais
-  if (typeof renderImportPreview === 'function' && importParsedRows && importParsedRows.length) renderImportPreview(importParsedRows);
 }
 
 // ──────────────────────────────────────────────────────

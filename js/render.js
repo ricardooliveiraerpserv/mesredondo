@@ -4526,15 +4526,6 @@ function renderImportPreview(rows) {
   if (topPgto) document.getElementById('bulkPgtoSelect').value = topPgto;
 
   updateImportTotals();
-
-  // Auto-verificação semântica de duplicatas via IA (roda em background na primeira carga)
-  if (typeof iaVerificarDuplicatas === 'function') {
-    var _temNaoChecados = importParsedRows.some(function(r) { return !r._existingMatch && !r._iaDupChecked; });
-    if (_temNaoChecados) {
-      // Pequeno delay para não bloquear a renderização inicial
-      setTimeout(function() { iaVerificarDuplicatas(); }, 600);
-    }
-  }
 }
 
 function updateImportTotals() {
