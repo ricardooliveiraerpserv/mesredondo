@@ -4498,18 +4498,20 @@ function renderImportPreview(rows) {
       sel.appendChild(opt);
     });
     // FIX: pre-select usando match normalizado (ignora diferença de acento/case)
-    if (r && r.xlsxTerc) {
-      var matchedNome = tercNormMap[_normTerc(r.xlsxTerc)];
+    // Prioridade: xlsxTerc (planilha) > terceiro (recuperado de deletados)
+    var _tercSrc = (r && r.xlsxTerc) ? r.xlsxTerc : (r && r.terceiro ? r.terceiro : '');
+    if (_tercSrc) {
+      var matchedNome = tercNormMap[_normTerc(_tercSrc)];
       if (matchedNome) {
         sel.value = matchedNome;
       } else {
         // Nome não cadastrado — mantém como texto na primeira opção para o usuário ver
         var opt = document.createElement('option');
-        opt.value = r.xlsxTerc;
-        opt.textContent = '⚠️ ' + r.xlsxTerc + ' (não cadastrado)';
+        opt.value = _tercSrc;
+        opt.textContent = '⚠️ ' + _tercSrc + ' (não cadastrado)';
         opt.style.color = '#f59e0b';
         sel.insertBefore(opt, sel.options[1]);
-        sel.value = r.xlsxTerc;
+        sel.value = _tercSrc;
       }
     }
   });
