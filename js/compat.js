@@ -352,7 +352,8 @@ window.carregarApp = async function() {
   window._carregarAppIsLoading = true;
   window._carregarAppPending = false;
   try {
-    _clearMemCache();
+    // NÃO limpar cache antes de carregar — evita tabela em branco durante fetch.
+    // _loadAllData sobrescreve cada chave do cache assim que a resposta chega.
     if (typeof window._loadAllData === 'function') await window._loadAllData();
 
     // Normaliza campo `data` e ordena por data decrescente

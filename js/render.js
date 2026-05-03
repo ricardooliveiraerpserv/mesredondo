@@ -708,9 +708,21 @@ function renderTable(tbodyId, items) {
 }
 
 function toggleStatusLanc(id, novoStatus) {
-  dbUpdateLancamento(id, { status: novoStatus })
-    .then(function() { return carregarApp(); })
-    .catch(function(e) { console.error('[toggleStatusLanc]', e.message); });
+  // Atualização otimista: reflete na UI imediatamente, persiste no banco em paralelo.
+  // Não chama carregarApp() — um reload completo por clique de status é excessivo
+  // e cria janela de cache vazio que quebra ordenações concurrent.
+  _memCache.lancamentos = (_memCache.lancamentos || []).map(
+    function(l) { return String(l.id) === String(id) ? Object.assign({}, l, { status: novoStatus }) : l; }
+  );
+  renderAllTable();
+  dbUpdateLancamento(id, { status: novoStatus }).catch(function(e) {
+    console.error('[toggleStatusLanc] falha no banco, revertendo:', e.message);
+    // Reverte cache e re-renderiza se persistência falhou
+    _memCache.lancamentos = (_memCache.lancamentos || []).map(
+      function(l) { return String(l.id) === String(id) ? Object.assign({}, l, { status: novoStatus === 'pago' ? 'pendente' : 'pago' }) : l; }
+    );
+    renderAllTable();
+  });
 }
 
 function editLancamento(id) { openModal(id); }
