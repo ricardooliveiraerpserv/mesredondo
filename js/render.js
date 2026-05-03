@@ -590,7 +590,7 @@ function renderTable(tbodyId, items) {
       c.style.display = 'block';
       c.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:0.85rem;">Nenhum lançamento neste período.</div>';
     } else {
-      tbody.innerHTML = '<tr><td colspan="15" class="empty-state">Nenhum lançamento neste período.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="14" class="empty-state">Nenhum lançamento neste período.</td></tr>';
     }
     return;
   }
@@ -678,8 +678,12 @@ function renderTable(tbodyId, items) {
     const pagLabel = l.pagamento
       ? `<span style="background:var(--surface2);border:1px solid var(--border);padding:2px 7px;border-radius:10px;white-space:nowrap;font-size:0.7rem;display:inline-flex;align-items:center;gap:4px">${_logoTag(pagLogoUrl, pagConf?.icone||'', 14)} ${l.pagamento}</span>`
       : '—';
+    const sgrpArg = sgrp ? `'${sgrp}'` : 'null';
     return `<tr data-id="${sid}">
-      <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="row-check" data-id="${sid}" onchange="onRowCheck()" style="cursor:pointer;accent-color:var(--text2)"></td>
+      <td style="padding:4px 6px;text-align:center;white-space:nowrap">
+        <button class="row-menu-btn" onclick="_openRowMenu('${sid}',${sgrpArg},'${l.status}',this)" title="Ações" style="background:none;border:none;color:var(--muted);font-size:1.1rem;line-height:1;cursor:pointer;padding:2px 5px;border-radius:5px;transition:color 0.15s,background 0.15s" onmouseenter="this.style.color='var(--text)';this.style.background='rgba(255,255,255,0.08)'" onmouseleave="this.style.color='var(--muted)';this.style.background='none'">⋯</button>
+        <input type="checkbox" class="row-check" data-id="${sid}" onchange="onRowCheck()" style="cursor:pointer;accent-color:var(--text2)">
+      </td>
       <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--accent2)">${l.vencimento || '—'}</td>
       <td style="font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(l.desc||'—').replace(/\s*\(\d+\/\d+\)\s*$/, '')}</td>
       <td style="text-align:center">${l.parcAtual ? '<span style="background:rgba(240,144,64,0.85);color:#000;padding:1px 7px;border-radius:4px;font-size:0.72rem;font-weight:700">'+l.parcAtual+'/'+l.parcTotal+'</span>' : '<span style="color:var(--muted)">—</span>'}</td>
@@ -693,15 +697,6 @@ function renderTable(tbodyId, items) {
       <td>${tercLabel}</td>
       <td>${bancoLabel}</td>
       <td><span class="badge badge-${l.tipo}">${l.tipo === 'receita' ? '↑ Receita' : '↓ Despesa'}</span> ${recorrBadge}</td>
-      <td style="white-space:nowrap;text-align:right">
-        ${l.status === 'pendente'
-          ? `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pago')" title="Marcar como pago" style="color:var(--green);margin-right:2px">✓</button>`
-          : `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pendente')" title="Estornar para pendente" style="color:var(--danger);margin-right:2px">↩</button>`
-        }
-        <button class="del-btn" onclick="editLancamento('${sid}')" title="Editar" style="color:var(--accent2);margin-right:2px">✎</button>
-        <button class="del-btn" onclick="copiarLancamento('${sid}')" title="Copiar lançamento" style="color:#60a5fa;margin-right:2px">⧉</button>
-        <button class="del-btn" onclick="smartDelete('${sid}',${sgrp ? `'${sgrp}'` : 'null'},event)" title="Excluir">✕</button>
-      </td>
     </tr>`;
   }).join('');
   updateBulkBar();
@@ -726,6 +721,65 @@ function toggleStatusLanc(id, novoStatus) {
 }
 
 function editLancamento(id) { openModal(id); }
+
+// ── Row context menu (⋯) ──────────────────────────────────────────────────────
+(function() {
+  var _menuEl = null;
+  var _outsideHandler = null;
+
+  function _getMenu() {
+    if (_menuEl) return _menuEl;
+    _menuEl = document.createElement('div');
+    _menuEl.id = 'rowCtxMenu';
+    _menuEl.style.cssText = 'display:none;position:fixed;z-index:9999;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px 0;box-shadow:0 6px 24px rgba(0,0,0,0.5);min-width:170px;font-size:0.82rem';
+    document.body.appendChild(_menuEl);
+    return _menuEl;
+  }
+
+  function _menuItem(icon, label, color, onclick) {
+    return `<button onclick="${onclick};_closeRowMenu()" style="display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;color:${color||'var(--text)'};padding:9px 16px;cursor:pointer;text-align:left;font-size:0.82rem;transition:background 0.12s" onmouseenter="this.style.background='rgba(255,255,255,0.07)'" onmouseleave="this.style.background='none'"><span style="font-size:1rem;width:16px;text-align:center">${icon}</span>${label}</button>`;
+  }
+
+  window._openRowMenu = function(id, grp, status, btn) {
+    _closeRowMenu();
+    var menu = _getMenu();
+    var grpArg = grp && grp !== 'null' ? `'${grp}'` : 'null';
+    var statusToggle = status === 'pendente'
+      ? _menuItem('✓', 'Marcar como pago',        'var(--green)',  `toggleStatusLanc('${id}','pago');_closeRowMenu()`)
+      : _menuItem('↩', 'Estornar para pendente',  'var(--danger)', `toggleStatusLanc('${id}','pendente');_closeRowMenu()`);
+    menu.innerHTML =
+      statusToggle +
+      '<div style="height:1px;background:var(--border);margin:3px 0"></div>' +
+      _menuItem('✎', 'Editar',   'var(--accent2)', `editLancamento('${id}')`) +
+      _menuItem('⧉', 'Copiar',   '#60a5fa',        `copiarLancamento('${id}')`) +
+      '<div style="height:1px;background:var(--border);margin:3px 0"></div>' +
+      _menuItem('✕', 'Excluir',  'var(--danger)',   `smartDelete('${id}',${grpArg},event)`);
+    // Position
+    var r = btn.getBoundingClientRect();
+    var mw = 170, mh = 180;
+    var top = r.bottom + 4;
+    var left = r.left;
+    if (top + mh > window.innerHeight) top = r.top - mh - 4;
+    if (left + mw > window.innerWidth)  left = window.innerWidth - mw - 8;
+    menu.style.top  = top  + 'px';
+    menu.style.left = left + 'px';
+    menu.style.display = 'block';
+    // Close on outside click
+    _outsideHandler = function(e) {
+      if (!menu.contains(e.target) && e.target !== btn) _closeRowMenu();
+    };
+    setTimeout(function() { document.addEventListener('click', _outsideHandler); }, 0);
+  };
+
+  window._closeRowMenu = function() {
+    if (_menuEl) _menuEl.style.display = 'none';
+    if (_outsideHandler) {
+      document.removeEventListener('click', _outsideHandler);
+      _outsideHandler = null;
+    }
+  };
+})();
+// ─────────────────────────────────────────────────────────────────────────────
 
 function duplicarDoModal() {
   // editId é a variável global do modal
