@@ -1483,6 +1483,13 @@ function setTipo(t) {
 }
 
 function salvarLancamento() {
+  // salvarLancamento dispara operação async mas não precisa ser awaited pelo caller (onclick)
+  _salvarLancamentoAsync().catch(function(e) {
+    console.error('[salvarLancamento]', e.message);
+  });
+}
+
+async function _salvarLancamentoAsync() {
   let erros = [];
   if (!tipoAtual) { document.getElementById('tipoError').style.display = 'block'; erros.push('tipo'); }
   else { document.getElementById('tipoError').style.display = 'none'; }
@@ -1505,18 +1512,15 @@ function salvarLancamento() {
   const data = loadData();
   const dataBase = _fData;
   const vencInput = document.getElementById('fVencimento').value;
-  // Se vencimento vazio: tenta registro existente, depois usa a data do lançamento
   let vencimento = vencInput ? inputDateToVenc(vencInput) : '';
-  const _existingRec = editId !== null ? (loadData().find(x => String(x.id) === String(editId)) || null) : null;
+  const _existingRec = editId !== null ? (data.find(x => String(x.id) === String(editId)) || null) : null;
   if (!vencimento) {
     if (_existingRec && _existingRec.vencimento) vencimento = _existingRec.vencimento;
-    // Último fallback: usa a data do lançamento como vencimento
     if (!vencimento && document.getElementById('fData').value) {
       vencimento = inputDateToVenc(document.getElementById('fData').value);
     }
   }
   let valorTotal = parseBRL(document.getElementById('fValor').value) || 0;
-  // Se valor zerado em edição, recupera do registro existente
   if (!valorTotal && _existingRec && _existingRec.valor) valorTotal = Math.abs(_existingRec.valor);
   const desc = document.getElementById('fDesc').value || '—';
   const categoria = document.getElementById('fCategoria').value || 'Outros';
@@ -1553,91 +1557,71 @@ function salvarLancamento() {
       const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
       const groupId = Date.now();
       const existing = data.find(x => String(x.id) === String(editId));
-      const filteredData = existing && existing.groupId
-        ? data.filter(x => String(x.groupId) !== String(existing.groupId))
-        : data.filter(x => String(x.id) !== String(editId));
+      const removedIds = existing && existing.groupId
+        ? data.filter(x => String(x.groupId) === String(existing.groupId)).map(x => String(x.id))
+        : [String(editId)];
+      const newItems = [];
       for (let i = 0; i < n; i++) {
         const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
         const ma = mesAno(dataBase, vp);
-        filteredData.unshift({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n });
+        newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n });
       }
-      saveData(filteredData);
+      for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
+      await dbSaveLancamentos(newItems);
     } else {
       const existing = data.find(x => String(x.id) === String(editId));
       const nParc = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 1);
-      // Se mudou para parcelado e tem mais de 1 parcela, criar grupo completo removendo a linha avulsa
       if (tipoLanc === 'parcelado' && nParc > 1) {
         const parcela = Math.round((valorTotal / nParc) * 100) / 100;
         const groupId = Date.now();
-        const filteredData = data.filter(x => String(x.id) !== String(editId));
+        const newItems = [];
         for (let i = 0; i < nParc; i++) {
           const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
           const ma = mesAno(dataBase, vp);
-          filteredData.unshift({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: nParc, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: nParc, _ts: groupId });
+          newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: nParc, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, banco, terceiro, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: nParc, _ts: groupId });
         }
-        saveData(filteredData);
+        _addTombstone(String(editId));
+        await dbDeleteLancamento(String(editId));
+        await dbSaveLancamentos(newItems);
       } else {
         const ma = mesAno(dataBase, vencimento);
         const l = { ...existing, id: editId, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, banco, terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
-        // Lê o estado ATUAL do cache (não o snapshot antigo capturado no início da função)
-        // para não sobrescrever mudanças feitas por operações intermediárias
-        _memCache.lancamentos = (_memCache.lancamentos || []).map(
-          x => String(x.id) === String(editId) ? l : x
-        );
-        console.log('[salvarLancamento] editando lançamento único:', editId, l.desc, l.valor);
-        dbUpdateLancamento(editId, l).catch(function(e) {
-          console.error('[salvarLancamento:update]', e.message);
-        });
+        await dbUpdateLancamento(editId, l);
       }
     }
   } else if (recorrAtual === 'parcelado') {
     const n = parseInt(document.getElementById('fParcelas').value) || 2;
     const parcela = Math.round((valorTotal / n) * 100) / 100;
     const groupId = Date.now();
+    const newItems = [];
     for (let i = 0; i < n; i++) {
       const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
       const ma = mesAno(dataBase, vp);
-      data.unshift({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: n, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: n, _ts: groupId });
+      newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: n, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: n, _ts: groupId });
     }
-    saveData(data);
+    await dbSaveLancamentos(newItems);
   } else if (recorrAtual === 'fixo') {
     const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
     const groupId = Date.now();
+    const newItems = [];
     for (let i = 0; i < n; i++) {
       const vp = vencimento ? addMonthsToVenc(vencimento, i) : '';
       const ma = mesAno(dataBase, vp);
-      data.unshift({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc: 'fixo', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n, _ts: groupId });
+      newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc: 'fixo', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n, _ts: groupId });
     }
-    saveData(data);
+    await dbSaveLancamentos(newItems);
   } else {
     const ma = mesAno(dataBase, vencimento);
     const _tsNow = Date.now();
     const _novoLanc = { id: _tsNow, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, terceiro, banco, mes: ma.mes, ano: ma.ano, _ts: _tsNow };
-    console.log('[salvarLancamento] novo lançamento:', _novoLanc.desc, _novoLanc.valor, _novoLanc.id);
-    data.unshift(_novoLanc);
-    saveData(data);
+    await dbSaveLancamentos([_novoLanc]);
   }
 
   closeModal();
-  // Usa _scheduleRender para evitar múltiplos renders disparados por saveData + safeRender
-  if (typeof _scheduleRender === 'function') {
-    _scheduleRender();
-  } else {
-    safeRender(() => {
-      renderAll();
-      setTimeout(function() {
-        if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
-        if (typeof renderCartoesTab === 'function') renderCartoesTab();
-        if (typeof renderParceladosTab === 'function') renderParceladosTab();
-        if (typeof renderVencimentosTab === 'function') renderVencimentosTab();
-        if (typeof renderAReceberTab === 'function') renderAReceberTab();
-        if (typeof renderAPagarTab === 'function') renderAPagarTab();
-      }, 100);
-    });
-  }
+  await carregarApp();
 }
 
-function _editScopeChoice(scope) {
+async function _editScopeChoice(scope) {
   document.getElementById('editScopeOverlay').style.display = 'none';
   const d = window._pendingEditData;
   if (!d) return;
@@ -1651,34 +1635,28 @@ function _editScopeChoice(scope) {
       const _vm = _parseVencMesAno(d.vencimento);
       if (_vm) { ma.mes = _vm.mes; ma.ano = _vm.ano; }
     }
-    const existingItem = data.find(x => String(x.id) === String(editId));
-    const parcela = existingItem ? Math.abs(existingItem.valor) : Math.round((d.valorTotal / n) * 100) / 100;
-    const updatedItem = { ...existingItem, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
-    // Lê o estado ATUAL do cache para não sobrescrever mudanças intermediárias
-    _memCache.lancamentos = (_memCache.lancamentos || []).map(
-      x => String(x.id) === String(editId) ? updatedItem : x
-    );
-    console.log('[editScopeChoice:single] persistindo update', editId);
-    dbUpdateLancamento(String(editId), updatedItem).catch(function(e) {
-      console.warn('[editScopeChoice:single:update]', e.message);
-    });
+    const parcela = existing ? Math.abs(existing.valor) : Math.round((d.valorTotal / n) * 100) / 100;
+    const updatedItem = { ...existing, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
+    await dbUpdateLancamento(String(editId), updatedItem);
   } else {
     const parcela = Math.round((d.valorTotal / n) * 100) / 100;
     const groupId = Date.now();
-    const filteredData = existing && existing.groupId
-      ? data.filter(x => String(x.groupId) !== String(existing.groupId))
-      : data.filter(x => String(x.id) !== String(editId));
+    const removedIds = existing && existing.groupId
+      ? data.filter(x => String(x.groupId) === String(existing.groupId)).map(x => String(x.id))
+      : [String(editId)];
+    const newItems = [];
     for (let i = 0; i < n; i++) {
       const vp = d.vencimento ? addMonthsToVenc(d.vencimento, i) : '';
       const mes = vp ? parseInt(vp.split('/')[1]) : parseInt(d.dataBase.split('-')[1]);
       const ano = vp ? parseInt(vp.split('/')[2]) : parseInt(d.dataBase.split('-')[0]);
-      filteredData.unshift({ id: groupId + i, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, parcAtual: i+1, parcTotal: n, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, tipoLanc: 'parcelado', vencimento: vp, banco: d.banco, terceiro: d.terceiro, mes, ano, groupId, recorr: 'parcelado', totalParcelas: n });
+      newItems.push({ id: groupId + i, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, parcAtual: i+1, parcTotal: n, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, tipoLanc: 'parcelado', vencimento: vp, banco: d.banco, terceiro: d.terceiro, mes, ano, groupId, recorr: 'parcelado', totalParcelas: n });
     }
-    saveData(filteredData);
+    for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
+    await dbSaveLancamentos(newItems);
   }
 
   window._pendingEditData = null;
   editId = null;
-  closeModal(); // remove 'open' do modalOverlay E 'modal-open' do body (evita overflow:hidden no mobile)
-  safeRender(() => { renderAll(); if (typeof renderTerceirosTab === 'function') renderTerceirosTab(); });
+  closeModal();
+  await carregarApp();
 }

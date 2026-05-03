@@ -867,13 +867,9 @@ function smartDelete(idOrBtn, groupId, e, recorrHint) {
 
 async function deleteLancamento(id) {
   if (!await _showSimpleConfirm('🗑 Excluir', 'Excluir este lançamento?', 'Excluir', 'var(--red)')) return;
-  // Lê o estado ATUAL do cache no momento da confirmação (não antes)
-  const filtered = loadData().filter(l => String(l.id) !== String(id));
   _addTombstone(id);
-  // saveData: (1) atualiza _memCache sincronamente, (2) chama dbDeleteLancamento internamente
-  // NÃO chamar dbDeleteLancamento aqui separado — saveData já faz isso
-  saveData(filtered);
-  _scheduleRender();
+  await dbDeleteLancamento(id);
+  await carregarApp();
 }
 
 function deleteGroup(groupId, itemId, e) {

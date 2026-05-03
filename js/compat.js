@@ -341,17 +341,30 @@ window._sbAutoSync = window._sbAutoSync || function() { /* no-op: saves diretos 
 window._markLocalDirty = window._markLocalDirty || function() { /* no-op */ };
 
 // ── carregarApp — única entrada para (re)carregar dados e renderizar ─
-// Chamada em: login, sbLoad, e qualquer ponto que precise de dados frescos.
-// Guard: não executa se já houver carregamento em andamento.
+// Fluxo obrigatório: persistir → carregarApp → renderizar.
+// Supabase é a fonte de verdade; _memCache é apenas reflexo do banco.
 window.carregarApp = async function() {
-  if (window._carregarAppEmAndamento) {
+  if (window._carregarAppIsLoading) {
     console.log('[carregarApp] chamada ignorada — já em andamento');
     return;
   }
-  window._carregarAppEmAndamento = true;
+  window._carregarAppIsLoading = true;
   try {
     _clearMemCache();
     if (typeof window._loadAllData === 'function') await window._loadAllData();
+
+    // Normaliza campo `data` e ordena por data decrescente
+    if (_memCache.lancamentos && _memCache.lancamentos.length) {
+      var _normFn = typeof normalizarData === 'function' ? normalizarData : function(d) { return d || ''; };
+      _memCache.lancamentos = _memCache.lancamentos.map(function(l) {
+        return Object.assign({}, l, { data: _normFn(l.data) });
+      });
+      _memCache.lancamentos.sort(function(a, b) {
+        var da = a.data || '', db = b.data || '';
+        return da < db ? 1 : da > db ? -1 : 0;
+      });
+    }
+
     // Sincroniza _rangeFilter com currentMonth/currentYear para evitar dessincronismo
     if (!window._rangeFilter) {
       window._rangeFilter = {
@@ -359,17 +372,21 @@ window.carregarApp = async function() {
         ate: { mes: currentMonth, ano: currentYear }
       };
     }
+
+    // Render único: renderAll + aba ativa se for especializada
     if (typeof renderAll === 'function') renderAll();
     try {
-      if (typeof renderTerceirosTab  === 'function') renderTerceirosTab();
-      if (typeof renderParceladosTab === 'function') renderParceladosTab();
-      if (typeof renderVencimentosTab=== 'function') renderVencimentosTab();
-      if (typeof renderCartoesTab    === 'function') renderCartoesTab();
+      var _activeTab = document.querySelector('.tab-content.active');
+      var _tab = _activeTab ? _activeTab.id.replace('tab-', '') : '';
+      if (_tab === 'terceiros'   && typeof renderTerceirosTab  === 'function') renderTerceirosTab();
+      if (_tab === 'parcelados'  && typeof renderParceladosTab === 'function') renderParceladosTab();
+      if (_tab === 'vencimentos' && typeof renderVencimentosTab=== 'function') renderVencimentosTab();
+      if (_tab === 'cartoes'     && typeof renderCartoesTab    === 'function') renderCartoesTab();
     } catch(e) {}
   } catch(e) {
     console.error('[carregarApp] erro:', e.message);
   } finally {
-    window._carregarAppEmAndamento = false;
+    window._carregarAppIsLoading = false;
   }
 };
 
