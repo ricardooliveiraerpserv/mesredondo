@@ -4678,6 +4678,7 @@ function _doImportInner() {
   var defaultTipo   = document.getElementById('importDefaultTipo') ? (document.getElementById('importDefaultTipo').value || 'despesa') : 'despesa';
   var lancamentos   = loadData();
   var added = 0;
+  var firstMes = 0, firstAno = 0;
 
   checked.forEach(function(idx) {
     var r = importParsedRows[idx];
@@ -4728,6 +4729,7 @@ function _doImportInner() {
     };
     if (isParc) { p0.parcAtual = r.parcAtual; p0.parcTotal = r.parcTotal; }
     if (chosenTerc) p0.terceiro = chosenTerc;
+    if (!firstMes) { firstMes = mes; firstAno = ano; }
     lancamentos.push(p0);
     added++;
     for (var i = 1; i <= remaining; i++) {
@@ -4755,11 +4757,23 @@ function _doImportInner() {
   });
 
   saveData(lancamentos);
-  renderAll();
   closeImportModal();
+
+  // Navega para o mês dos lançamentos importados
+  if (firstMes && firstAno) {
+    currentMonth = firstMes;
+    currentYear  = firstAno;
+    window._rangeFilter = { de: { mes: firstMes, ano: firstAno }, ate: { mes: firstMes, ano: firstAno } };
+    ['filterMonthDe','filterMonthAte'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = firstMes; });
+    ['filterYearDe','filterYearAte'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = firstAno; });
+  }
+
+  // Garante que o usuário está na aba Lançamentos e re-renderiza
+  var _lancBtn = document.querySelector('.nav-tab[onclick*="lancamentos"]');
+  if (_lancBtn) { showTab('lancamentos', _lancBtn); }
+  else { renderAll(); }
+
   alert('\u2705 Importa\u00e7\u00e3o conclu\u00edda!\n' + added + ' lan\u00e7amentos adicionados.');
-  setTimeout(function() { if (typeof sbSave === 'function') sbSave(); }, 800);
-  // Auto-salva no Supabase após importação
   setTimeout(function() { if (typeof sbSave === 'function') sbSave(); }, 800);
 }
 
