@@ -158,7 +158,6 @@ function renderTerceirosTab() {
   const bancoF   = window.FSEL ? FSEL.getValues('filtroTerceiroBanco')  : [];
   const descF    = (document.getElementById('filtroTerceiroDesc')?.value || '').toLowerCase();
   const _tfvRaw  = (document.getElementById('filtroTerceiroValor')?.value || '').trim();
-  const filtroValor = _tfvRaw && typeof parseBRL === 'function' ? parseBRL(_tfvRaw) : NaN;
 
   const all = loadDataBanco().filter(l => {
     if (!CAT_TERC_SET.has(l.categoria)) return false;
@@ -312,7 +311,7 @@ function renderTerceirosTab() {
     if (pagF.length    && !pagF.includes(l.pagamento||'')) return false;
     if (bancoF.length  && !bancoF.includes(l.banco||'')) return false;
     if (descF && !((l.desc||'')+(l.terceiro||'')+(l.pagamento||'')).toLowerCase().includes(descF)) return false;
-    if (!isNaN(filtroValor) && filtroValor > 0 && Math.abs((Number(l.valor)||0) - filtroValor) > 0.005) return false;
+    if (!_matchValor(l.valor, _tfvRaw)) return false;
     return true;
   });
 

@@ -1,5 +1,17 @@
 // ======== RENDER ========
 
+// Helper: filtro incremental de valor.
+// Compara o valor formatado (ex: "100,50") com o que o user digitou.
+// Aceita digitação parcial: "100" filtra 100,00 / 1000,00 / 100,50 / 1100 etc.
+function _matchValor(valor, inputRaw) {
+  if (!inputRaw) return true;
+  const norm = String(inputRaw).replace(/[^\d,]/g, '');
+  if (!norm) return true;
+  const valorStr = (Math.abs(Number(valor) || 0)).toFixed(2).replace('.', ',');
+  return valorStr.includes(norm);
+}
+window._matchValor = _matchValor;
+
 // Helper: extrai { mes, ano } de uma string de vencimento em qualquer formato
 // Aceita YYYY-MM-DD (Supabase) e DD/MM/YYYY (legado)
 function _parseVencMesAno(venc) {
@@ -1485,7 +1497,6 @@ function renderAllTable() {
   const busca = _filtroBuscaEl ? _filtroBuscaEl.value.toLowerCase() : '';
   const _filtroValorEl = document.getElementById('filtroValor');
   const _filtroValorRaw = _filtroValorEl ? _filtroValorEl.value.trim() : '';
-  const filtroValor = _filtroValorRaw && typeof parseBRL === 'function' ? parseBRL(_filtroValorRaw) : NaN;
 
   // Popula filtro de terceiro dinamicamente
   const tercSel = document.getElementById('filtroTerceiro');
@@ -1532,10 +1543,7 @@ function renderAllTable() {
       const haystack = [(l.desc||'').replace(/\s*\(\d+\/\d+\)\s*$/, ''), l.categoria, l.subCategoria, l.pagamento, l.terceiro].join(' ').toLowerCase();
       if (!haystack.includes(busca)) return false;
     }
-    if (!isNaN(filtroValor) && filtroValor > 0) {
-      // Comparação por valor exato com tolerância de 1 centavo (float)
-      if (Math.abs((Number(l.valor) || 0) - filtroValor) > 0.005) return false;
-    }
+    if (!_matchValor(l.valor, _filtroValorRaw)) return false;
     return true;
   });
 

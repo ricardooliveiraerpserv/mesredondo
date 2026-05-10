@@ -44,7 +44,6 @@ function renderVencimentosTab() {
   const bancF   = window.FSEL ? FSEL.getValues('vencFiltroBanco')   : [];
   const busca   = (document.getElementById('vencFiltroBusca')?.value || '').toLowerCase();
   const _vfvRaw = (document.getElementById('vencFiltroValor')?.value || '').trim();
-  const filtroValor = _vfvRaw && typeof parseBRL === 'function' ? parseBRL(_vfvRaw) : NaN;
 
   // Mostrar/ocultar botão de limpar filtros
   const _temFiltro = tipoF.length || catF.length || subCatF.length || pagF.length || tercF.length || bancF.length || busca || receDespF.length;
@@ -141,7 +140,7 @@ function renderVencimentosTab() {
     if (busca && !(l.desc||'').toLowerCase().includes(busca) &&
                  !(l.categoria||'').toLowerCase().includes(busca) &&
                  !(l.pagamento||'').toLowerCase().includes(busca)) return false;
-    if (!isNaN(filtroValor) && filtroValor > 0 && Math.abs((Number(l.valor)||0) - filtroValor) > 0.005) return false;
+    if (!_matchValor(l.valor, _vfvRaw)) return false;
     return true;
   });
 
