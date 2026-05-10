@@ -1483,6 +1483,9 @@ function renderAllTable() {
   const bancoFiltro= window.FSEL ? FSEL.getValues('filtroBanco')        : [];
   const _filtroBuscaEl = document.getElementById('filtroBusca');
   const busca = _filtroBuscaEl ? _filtroBuscaEl.value.toLowerCase() : '';
+  const _filtroValorEl = document.getElementById('filtroValor');
+  const _filtroValorRaw = _filtroValorEl ? _filtroValorEl.value.trim() : '';
+  const filtroValor = _filtroValorRaw && typeof parseBRL === 'function' ? parseBRL(_filtroValorRaw) : NaN;
 
   // Popula filtro de terceiro dinamicamente
   const tercSel = document.getElementById('filtroTerceiro');
@@ -1528,6 +1531,10 @@ function renderAllTable() {
     if (busca) {
       const haystack = [(l.desc||'').replace(/\s*\(\d+\/\d+\)\s*$/, ''), l.categoria, l.subCategoria, l.pagamento, l.terceiro].join(' ').toLowerCase();
       if (!haystack.includes(busca)) return false;
+    }
+    if (!isNaN(filtroValor) && filtroValor > 0) {
+      // Comparação por valor exato com tolerância de 1 centavo (float)
+      if (Math.abs((Number(l.valor) || 0) - filtroValor) > 0.005) return false;
     }
     return true;
   });

@@ -29,6 +29,8 @@ function renderParceladosTab() {
   const tercF   = window.FSEL ? FSEL.getValues('parcFiltroTerc')   : [];
   const bancF   = window.FSEL ? FSEL.getValues('parcFiltroBanco')  : [];
   const busca   = (document.getElementById('parcFiltroBusca')?.value || '').toLowerCase();
+  const _pfvRaw = (document.getElementById('parcFiltroValor')?.value || '').trim();
+  const filtroValor = _pfvRaw && typeof parseBRL === 'function' ? parseBRL(_pfvRaw) : NaN;
 
   const allData = loadDataBanco();
   const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -153,6 +155,12 @@ function renderParceladosTab() {
     if (tercF.length   && !tercF.includes(s.terceiro||'')) return false;
     if (bancF.length   && !bancF.includes(s.banco||''))   return false;
     if (busca && !s.descClean.toLowerCase().includes(busca)) return false;
+    // filtro valor exato: compara com vlParcela (valor de cada parcela) ou vlTotal
+    if (!isNaN(filtroValor) && filtroValor > 0) {
+      const matchParcela = Math.abs((Number(s.vlParcela)||0) - filtroValor) <= 0.005;
+      const matchTotal   = Math.abs((Number(s.vlTotal)||0)   - filtroValor) <= 0.005;
+      if (!matchParcela && !matchTotal) return false;
+    }
     return true;
   });
 
