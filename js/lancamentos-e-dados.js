@@ -193,13 +193,11 @@ function onCatChangeTerceiro() {
   const row = document.getElementById('fTerceiroRow');
   const alerta = document.getElementById('alertaTerceiroCat');
   const alertaTexto = document.getElementById('alertaTerceiroTexto');
+  const fTerc = document.getElementById('fTerceiro');
   const isTercCat = (typeof _CATS_TERCEIRO !== 'undefined' && _CATS_TERCEIRO.has(cat)) || CAT_TERC_SET.has(cat);
   if (row) row.style.display = isTercCat ? 'block' : 'none';
-  // Limpa o terceiro quando categoria não é de terceiros
-  if (!isTercCat) {
-    const fTerc = document.getElementById('fTerceiro');
-    if (fTerc) fTerc.value = '';
-  }
+  if (fTerc) fTerc.required = isTercCat;
+  if (!isTercCat && fTerc) fTerc.value = '';
   if (alerta) {
     if (isTercCat) {
       let msg = '';
@@ -1482,6 +1480,31 @@ function setTipo(t) {
   _filterCatsByTipo(t);
 }
 
+/**
+ * Gera os espelhos de "Entrada Terceiro" para cada lançamento de despesa
+ * com categoria "Dividas de terceiros". O espelho copia desc, valor,
+ * data, vencimento, terceiro, banco, status e pagamento — apenas o
+ * tipo e a categoria mudam (vira receita / Entrada Terceiro).
+ */
+function _criarEspelhosTerceiros(items) {
+  const espelhos = [];
+  let nextId = Date.now() + 1; // garante id único e diferente dos originais
+  for (const l of items) {
+    if (l.tipo === 'despesa' && l.categoria === 'Dividas de terceiros') {
+      espelhos.push({
+        ...l,
+        id: nextId++,
+        tipo: 'receita',
+        categoria: 'Entrada Terceiro',
+        subCategoria: 'Entrada Terceiro',
+        _ts: Date.now(),
+        _espelhoDe: l.id,
+      });
+    }
+  }
+  return espelhos;
+}
+
 async function salvarLancamento() {
   const _btn = document.querySelector('button[onclick="salvarLancamento()"]');
   if (_btn && _btn.disabled) return;
@@ -1498,12 +1521,16 @@ async function salvarLancamento() {
     const _fCat   = document.getElementById('fCategoria').value;
     const _fBanco = document.getElementById('fBanco')?.value || '';
 
+    const _isTercCat = CAT_TERC_SET.has(_fCat) || (typeof _CATS_TERCEIRO !== 'undefined' && _CATS_TERCEIRO.has(_fCat));
+    const _fTerc  = document.getElementById('fTerceiro')?.value || '';
+
     if (!_fData)  { erros.push('data');  highlightRequired('fData'); }  else clearRequired('fData');
     if (!_fVenc)  { erros.push('venc');  highlightRequired('fVencimento'); } else clearRequired('fVencimento');
     if (!_fValor || parseBRL(_fValor) <= 0) { erros.push('valor'); highlightRequired('fValor'); } else clearRequired('fValor');
     if (!_fDesc)  { erros.push('desc');  highlightRequired('fDesc'); }  else clearRequired('fDesc');
     if (!_fCat)   { erros.push('cat');   highlightRequired('fCategoria'); } else clearRequired('fCategoria');
     if (!_fBanco) { erros.push('banco'); highlightRequired('fBanco'); }  else clearRequired('fBanco');
+    if (_isTercCat && !_fTerc) { erros.push('terceiro'); highlightRequired('fTerceiro'); } else clearRequired('fTerceiro');
     if (erros.length > 0) return;
 
     const data = loadData();
@@ -1597,6 +1624,8 @@ async function salvarLancamento() {
         newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: parcela, desc, parcAtual: i+1, parcTotal: n, categoria, subCategoria, status, pagamento, tipoLanc: 'parcelado', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'parcelado', totalParcelas: n, _ts: groupId });
       }
       await dbSaveLancamentos(newItems);
+      const espelhos = _criarEspelhosTerceiros(newItems);
+      if (espelhos.length) await dbSaveLancamentos(espelhos);
     } else if (recorrAtual === 'fixo') {
       const n = parseInt(document.getElementById('fMesesFixo').value) || 12;
       const groupId = Date.now();
@@ -1607,11 +1636,15 @@ async function salvarLancamento() {
         newItems.push({ id: groupId + i, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc: 'fixo', vencimento: vp, terceiro, banco, mes: ma.mes, ano: ma.ano, groupId, recorr: 'fixo', totalParcelas: n, _ts: groupId });
       }
       await dbSaveLancamentos(newItems);
+      const espelhos = _criarEspelhosTerceiros(newItems);
+      if (espelhos.length) await dbSaveLancamentos(espelhos);
     } else {
       const ma = mesAno(dataBase, vencimento);
       const _tsNow = Date.now();
       const _novoLanc = { id: _tsNow, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, terceiro, banco, mes: ma.mes, ano: ma.ano, _ts: _tsNow };
       await dbSaveLancamentos([_novoLanc]);
+      const espelhos = _criarEspelhosTerceiros([_novoLanc]);
+      if (espelhos.length) await dbSaveLancamentos(espelhos);
     }
 
     closeModal();
