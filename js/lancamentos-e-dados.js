@@ -1568,11 +1568,21 @@ async function salvarLancamento() {
     }
 
     if (editId !== null) {
+      // Detecta transição da categoria PARA "Dividas de terceiros" (despesa)
+      // e pergunta ao usuário se deve criar o espelho "Entrada Terceiro".
+      const _existingForMirror = data.find(x => String(x.id) === String(editId));
+      const _wasDivida3 = _existingForMirror && _existingForMirror.categoria === 'Dividas de terceiros';
+      const _isDivida3Now = categoria === 'Dividas de terceiros' && tipoAtual === 'despesa';
+      let _editCreateMirror = false;
+      if (!_wasDivida3 && _isDivida3Now) {
+        _editCreateMirror = confirm('Esse lançamento foi alterado para "Dívida de terceiros". Deseja criar a receita espelho como "Entrada Terceiro"?');
+      }
+
       if (tipoLanc === 'parcelado') {
         const existing = data.find(x => String(x.id) === String(editId));
         if (existing && existing.groupId) {
           const _nParcelasPending = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 2);
-          window._pendingEditData = { tipoLanc, tipoAtual, dataBase, valorTotal, desc, categoria, subCategoria, status, pagamento, vencimento, banco, terceiro, nParcelasPending: _nParcelasPending };
+          window._pendingEditData = { tipoLanc, tipoAtual, dataBase, valorTotal, desc, categoria, subCategoria, status, pagamento, vencimento, banco, terceiro, nParcelasPending: _nParcelasPending, createMirror: _editCreateMirror };
           document.getElementById('editScopeOverlay').style.display = 'flex';
           return;
         }
@@ -1592,6 +1602,10 @@ async function salvarLancamento() {
         }
         for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
         await dbSaveLancamentos(newItems);
+        if (_editCreateMirror) {
+          const espelhos = _criarEspelhosTerceiros(newItems);
+          if (espelhos.length) await dbSaveLancamentos(espelhos);
+        }
       } else {
         const existing = data.find(x => String(x.id) === String(editId));
         const nParc = parseInt(document.getElementById('fParcelas').value) || (existing?.parcTotal || existing?.totalParcelas || 1);
@@ -1607,10 +1621,18 @@ async function salvarLancamento() {
           _addTombstone(String(editId));
           await dbDeleteLancamento(String(editId));
           await dbSaveLancamentos(newItems);
+          if (_editCreateMirror) {
+            const espelhos = _criarEspelhosTerceiros(newItems);
+            if (espelhos.length) await dbSaveLancamentos(espelhos);
+          }
         } else {
           const ma = mesAno(dataBase, vencimento);
           const l = { ...existing, id: editId, tipo: tipoAtual, data: dataBase, valor: valorTotal, desc, categoria, subCategoria, status, pagamento, tipoLanc, vencimento, banco, terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
           await dbUpdateLancamento(editId, l);
+          if (_editCreateMirror) {
+            const espelhos = _criarEspelhosTerceiros([l]);
+            if (espelhos.length) await dbSaveLancamentos(espelhos);
+          }
         }
       }
     } else if (recorrAtual === 'parcelado') {
@@ -1674,6 +1696,10 @@ async function _editScopeChoice(scope) {
       const parcela = existing ? Math.abs(existing.valor) : Math.round((d.valorTotal / n) * 100) / 100;
       const updatedItem = { ...existing, tipo: d.tipoAtual, data: d.dataBase, valor: parcela, desc: d.desc, categoria: d.categoria, subCategoria: d.subCategoria, status: d.status, pagamento: d.pagamento, vencimento: d.vencimento, banco: d.banco, terceiro: d.terceiro, mes: ma.mes, ano: ma.ano, _ts: Date.now() };
       await dbUpdateLancamento(String(editId), updatedItem);
+      if (d.createMirror) {
+        const espelhos = _criarEspelhosTerceiros([updatedItem]);
+        if (espelhos.length) await dbSaveLancamentos(espelhos);
+      }
     } else {
       const parcela = Math.round((d.valorTotal / n) * 100) / 100;
       const groupId = Date.now();
@@ -1689,6 +1715,10 @@ async function _editScopeChoice(scope) {
       }
       for (const sid of removedIds) { _addTombstone(sid); await dbDeleteLancamento(sid); }
       await dbSaveLancamentos(newItems);
+      if (d.createMirror) {
+        const espelhos = _criarEspelhosTerceiros(newItems);
+        if (espelhos.length) await dbSaveLancamentos(espelhos);
+      }
     }
     window._pendingEditData = null;
     editId = null;
