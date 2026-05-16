@@ -595,6 +595,11 @@ window._initApp = function() {
   try { populateBancoSelects();     } catch(e) {}
   try { populateCatSelects();       } catch(e) {}
 
+  // Migração de provisões sem banco — agora com cache populado (_loadAllData
+  // já terminou). Era chamada de timeout no DOMContentLoaded, o que disparava
+  // cedo demais e marcava como migrada com provs=[].
+  try { if (typeof window._migrateProvisoesSemBanco === 'function') window._migrateProvisoesSemBanco(); } catch(e) { console.warn('[initApp] migrateProvisoes:', e.message); }
+
   // Render principal
   try { renderAll();                } catch(e) { console.warn('[initApp] renderAll:', e.message); }
   try { renderBancoCards();         } catch(e) {}

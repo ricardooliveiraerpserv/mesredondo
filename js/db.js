@@ -299,7 +299,8 @@ async function dbLoadProvisoes() {
       subCategoria: r.sub_categoria,
       valor:        parseFloat(r.valor),
       mes:          r.mes,
-      ano:          r.ano
+      ano:          r.ano,
+      banco:        r.banco || ''
     }));
     _cacheSet('provisoes', data);
     return data;
@@ -320,7 +321,8 @@ async function dbSaveProvisoes(provisoes) {
     sub_categoria: p.subCategoria,
     valor:        p.valor,
     mes:          p.mes,
-    ano:          p.ano
+    ano:          p.ano,
+    banco:        p.banco || null
   }));
   try {
     await _flushPending();

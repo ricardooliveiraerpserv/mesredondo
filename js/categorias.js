@@ -113,34 +113,44 @@ function updateProvPreview() {
 // Antes desta mudança, prov sem banco era tratada como "global" e aparecia
 // em todos os bancos. Agora exigimos banco obrigatório e atribuímos as
 // antigas ao Itaú (decisão do usuário em 2026-05-16).
-async function _migrateProvisoesSemBanco() {
-  if (localStorage.getItem('mf_provs_migrated_v1') === '1') return;
+//
+// IMPORTANTE: precisa rodar DEPOIS de _loadAllData (que popula _memCache).
+// Se rodar antes, provs=[] e marca como migrada sem ter feito nada — daí
+// quando provs reais chegam, o filtro nega tudo e o orçamento "some".
+// Por isso é chamada do _initApp (já com cache populado), não de timeout.
+window._migrateProvisoesSemBanco = async function () {
+  // v2 invalida a flag v1 que pode ter sido marcada prematuramente
+  if (localStorage.getItem('mf_provs_migrated_v2') === '1') return;
   try {
     const provs = (typeof loadProvisoes === 'function') ? loadProvisoes() : [];
-    const semBanco = provs.filter(p => !p.banco);
-    if (!semBanco.length) {
-      localStorage.setItem('mf_provs_migrated_v1', '1');
+    const bancos = (typeof loadBancos === 'function') ? loadBancos() : [];
+    // Se ainda não há dados carregados, NÃO marca como migrado — espera
+    // próxima oportunidade. Só conclui quando temos sinal de que o cache
+    // foi populado pelo _loadAllData (bancos existentes é bom indicador).
+    if (!bancos.length) {
+      console.warn('[migrate-prov] cache ainda não populado (0 bancos), adiando.');
       return;
     }
-    const bancos = (typeof loadBancos === 'function') ? loadBancos() : [];
+    const semBanco = provs.filter(p => !p.banco);
+    if (!semBanco.length) {
+      localStorage.setItem('mf_provs_migrated_v2', '1');
+      console.log('[migrate-prov] nenhuma provisão sem banco — nada pra migrar.');
+      return;
+    }
     const stripAccents = s => (s || '').toLowerCase().normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
     const itau = bancos.find(b => stripAccents(b.nome).includes('itau'));
     if (!itau) {
       console.warn('[migrate-prov] Banco Itaú não encontrado — provisões sem banco mantidas até cadastrar.');
-      return; // não marca como migrado pra tentar de novo no próximo boot
+      return; // não marca como migrado pra tentar de novo
     }
     const novas = provs.map(p => p.banco ? p : { ...p, banco: itau.id });
     if (typeof saveProvisoes === 'function') saveProvisoes(novas);
-    localStorage.setItem('mf_provs_migrated_v1', '1');
+    localStorage.setItem('mf_provs_migrated_v2', '1');
     console.log('[migrate-prov] migradas', semBanco.length, 'provisões sem banco para', itau.nome);
   } catch (e) {
     console.error('[migrate-prov]', e && e.message);
   }
-}
-// Dispara após o app carregar dados (que populam _memCache.bancos/provisoes)
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(_migrateProvisoesSemBanco, 2000);
-});
+};
 
 async function salvarProvisao() {
   const cat = document.getElementById('pCategoria').value.trim();
