@@ -407,39 +407,43 @@ window.carregarApp = async function() {
 // ── Carregamento inicial dos dados após login ─────────────────────────
 // Chamado por _onLogin() em sync-auth.js após autenticação
 window._loadAllData = async function() {
-  try {
-    var lncs  = await dbLoadLancamentos();
-    _memCache.lancamentos = lncs  || [];
-    console.log('[compat] _loadAllData lancamentos:', _memCache.lancamentos.length);
-  } catch(e) {
-    console.error('[compat] _loadAllData ERRO lancamentos:', e.message);
-    _memCache.lancamentos = [];
+  // Antes: 7 awaits sequenciais (lancamentos → categorias → ... → config),
+  // somando ~20-35s. Agora paralelos via Promise.all — tempo total = pior caso
+  // do request mais lento, não a soma. Cada loader tem .catch próprio pra
+  // que um erro isolado não derrube os demais.
+  var _safe = function(name, fn) {
+    return fn().catch(function(e) {
+      console.error('[compat] _loadAllData ERRO ' + name + ':', e && e.message);
+      return null;
+    });
+  };
+  var _t0 = Date.now();
+  var results = await Promise.all([
+    _safe('lancamentos', dbLoadLancamentos),
+    _safe('categorias',  dbLoadCategorias),
+    _safe('pagamentos',  dbLoadPagamentos),
+    _safe('bancos',      dbLoadBancos),
+    _safe('terceiros',   dbLoadTerceiros),
+    _safe('provisoes',   dbLoadProvisoes),
+    _safe('config',      dbLoadConfig),
+  ]);
+  var lncs = results[0], cats = results[1], pags = results[2];
+  var bancs = results[3], tercs = results[4], provs = results[5], conf = results[6];
+
+  _memCache.lancamentos = lncs  || [];
+  console.log('[compat] _loadAllData lancamentos:', _memCache.lancamentos.length, '(em', (Date.now()-_t0)+'ms)');
+  _memCache.categorias  = cats  || [];
+  // Pagamentos: nunca sobrescrever cache existente com array vazio
+  if (pags && pags.length) {
+    _memCache.pagamentos = pags;
+  } else {
+    _memCache.pagamentos = _memCache.pagamentos && _memCache.pagamentos.length ? _memCache.pagamentos : [];
+    if (!pags) console.warn('[compat] pagamentos: falha ou vazio — mantendo cache existente');
   }
-  try {
-    var cats  = await dbLoadCategorias();    _memCache.categorias  = cats  || [];
-  } catch(e) { _memCache.categorias = []; }
-  try {
-    var pags  = await dbLoadPagamentos();
-    // Nunca sobrescrever pagamentos reais com array vazio — mantém cache anterior se retornar vazio
-    if (pags && pags.length) {
-      _memCache.pagamentos = pags;
-    } else {
-      _memCache.pagamentos = _memCache.pagamentos && _memCache.pagamentos.length ? _memCache.pagamentos : [];
-      console.warn('[compat] pagamentos retornou vazio — mantendo cache existente');
-    }
-  } catch(e) { console.warn('[compat] erro ao carregar pagamentos:', e); }
-  try {
-    var bancs = await dbLoadBancos();        _memCache.bancos      = bancs || [];
-  } catch(e) { _memCache.bancos = []; }
-  try {
-    var tercs = await dbLoadTerceiros();     _memCache.terceiros   = tercs || [];
-  } catch(e) { _memCache.terceiros = []; }
-  try {
-    var provs = await dbLoadProvisoes();     _memCache.provisoes   = provs || [];
-  } catch(e) { _memCache.provisoes = []; }
-  try {
-    var conf  = await dbLoadConfig();        _memCache.config      = conf  || {};
-  } catch(e) { _memCache.config = {}; }
+  _memCache.bancos      = bancs || [];
+  _memCache.terceiros   = tercs || [];
+  _memCache.provisoes   = provs || [];
+  _memCache.config      = conf  || {};
 
   // Inicializa defaults se novo usuário
   if (!_memCache.categorias.length && typeof DEFAULT_CATS !== 'undefined') {
