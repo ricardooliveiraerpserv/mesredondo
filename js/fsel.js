@@ -599,7 +599,8 @@ window._initApp = function() {
   // já terminou). Era chamada de timeout no DOMContentLoaded, o que disparava
   // cedo demais e marcava como migrada com provs=[].
   try { if (typeof window._migrateProvisoesSemBanco === 'function') window._migrateProvisoesSemBanco(); } catch(e) { console.warn('[initApp] migrateProvisoes:', e.message); }
-  try { if (typeof window._migrateEspelhosTerceirosPendente === 'function') window._migrateEspelhosTerceirosPendente(); } catch(e) { console.warn('[initApp] migrateEspelhos:', e.message); }
+  // _migrateEspelhosTerceirosPendente DESATIVADA em 2026-05-16 — usuário reportou que
+  // dashboard zerou após o deploy. Investigando se a migração foi a causa.
 
   // Render principal
   try { renderAll();                } catch(e) { console.warn('[initApp] renderAll:', e.message); }
