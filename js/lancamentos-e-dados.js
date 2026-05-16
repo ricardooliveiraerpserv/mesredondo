@@ -1352,6 +1352,8 @@ function openModal(id, _prefill) {
   // por causa do cache em memória estar velho.
   _refreshTerceirosCacheAndRepopulate();
   cancelNewTerceiroInline();
+  if (typeof cancelNewCategoriaInline === 'function') cancelNewCategoriaInline();
+  if (typeof cancelNewSubCategoriaInline === 'function') cancelNewSubCategoriaInline();
   populatePagSelects();
   populateBancoSelects();
 

@@ -664,3 +664,121 @@ function onFiltroSubCatChange() {
 function fmt(v) {
   return 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+// ======== INLINE: + Nova Categoria / Sub-Categoria dentro do modal de lançamento ========
+
+window.toggleNewCategoriaInline = function () {
+  const box = document.getElementById('newCategoriaInlineBox');
+  const btn = document.getElementById('btnNewCategoriaInline');
+  if (!box) return;
+  const isOpen = box.style.display !== 'none';
+  if (isOpen) { cancelNewCategoriaInline(); return; }
+  box.style.display = 'block';
+  if (btn) { btn.textContent = '× Cancelar'; btn.style.color = '#f87171'; btn.style.borderColor = 'rgba(248,113,113,0.45)'; btn.style.background = 'rgba(248,113,113,0.10)'; }
+  const tipoSel = document.getElementById('newCategoriaInlineTipo');
+  if (tipoSel && typeof tipoAtual !== 'undefined' && (tipoAtual === 'despesa' || tipoAtual === 'receita')) {
+    tipoSel.value = tipoAtual;
+  }
+  setTimeout(() => { const i = document.getElementById('newCategoriaInlineNome'); if (i) i.focus(); }, 40);
+};
+
+window.cancelNewCategoriaInline = function () {
+  const box = document.getElementById('newCategoriaInlineBox');
+  const btn = document.getElementById('btnNewCategoriaInline');
+  if (box) box.style.display = 'none';
+  if (btn) { btn.textContent = '+ Nova'; btn.style.color = '#4af0a0'; btn.style.borderColor = 'rgba(74,240,160,0.45)'; btn.style.background = 'rgba(74,240,160,0.10)'; }
+  const inp = document.getElementById('newCategoriaInlineNome'); if (inp) inp.value = '';
+  const icn = document.getElementById('newCategoriaInlineIcone'); if (icn) icn.value = '';
+};
+
+window.salvarNewCategoriaInline = async function () {
+  const inp = document.getElementById('newCategoriaInlineNome');
+  const icn = document.getElementById('newCategoriaInlineIcone');
+  const tipoSel = document.getElementById('newCategoriaInlineTipo');
+  const btn = document.getElementById('btnSaveNewCategoriaInline');
+  const nome = (inp && inp.value || '').trim();
+  if (!nome) { alert('Informe o nome da nova categoria.'); return; }
+  const tipo = (tipoSel && tipoSel.value) || 'despesa';
+  const icone = (icn && icn.value || '').trim();
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const cats = loadCats();
+    const existing = cats.find(c => (c.nome || '').toLowerCase() === nome.toLowerCase());
+    if (existing) {
+      cancelNewCategoriaInline();
+      const fCat = document.getElementById('fCategoria');
+      if (fCat) { fCat.value = existing.nome; onCatChange(); }
+      alert('Essa categoria já existe — selecionei ela pra você.');
+      return;
+    }
+    const cor = CAT_COLORS[Math.floor(Math.random() * CAT_COLORS.length)];
+    cats.push({ id: 'cat_' + Date.now(), nome, tipo, cor, icone, subs: [] });
+    saveCats(cats);
+    populateCatSelects();
+    const fCat = document.getElementById('fCategoria');
+    if (fCat) { fCat.value = nome; onCatChange(); }
+    cancelNewCategoriaInline();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+  }
+};
+
+window.toggleNewSubCategoriaInline = function () {
+  const fCat = document.getElementById('fCategoria');
+  const catNome = fCat ? fCat.value : '';
+  if (!catNome) { alert('Selecione primeiro uma categoria.'); return; }
+  const box = document.getElementById('newSubCategoriaInlineBox');
+  const btn = document.getElementById('btnNewSubCategoriaInline');
+  if (!box) return;
+  const isOpen = box.style.display !== 'none';
+  if (isOpen) { cancelNewSubCategoriaInline(); return; }
+  const hint = document.getElementById('newSubCategoriaInlineCatNome');
+  if (hint) hint.textContent = catNome;
+  box.style.display = 'block';
+  if (btn) { btn.textContent = '× Cancelar'; btn.style.color = '#f87171'; btn.style.borderColor = 'rgba(248,113,113,0.45)'; btn.style.background = 'rgba(248,113,113,0.10)'; }
+  setTimeout(() => { const i = document.getElementById('newSubCategoriaInlineNome'); if (i) i.focus(); }, 40);
+};
+
+window.cancelNewSubCategoriaInline = function () {
+  const box = document.getElementById('newSubCategoriaInlineBox');
+  const btn = document.getElementById('btnNewSubCategoriaInline');
+  if (box) box.style.display = 'none';
+  if (btn) { btn.textContent = '+ Nova'; btn.style.color = '#4af0a0'; btn.style.borderColor = 'rgba(74,240,160,0.45)'; btn.style.background = 'rgba(74,240,160,0.10)'; }
+  const inp = document.getElementById('newSubCategoriaInlineNome'); if (inp) inp.value = '';
+};
+
+window.salvarNewSubCategoriaInline = async function () {
+  const fCat = document.getElementById('fCategoria');
+  const catNome = fCat ? fCat.value : '';
+  if (!catNome) { alert('Selecione primeiro uma categoria.'); return; }
+  const inp = document.getElementById('newSubCategoriaInlineNome');
+  const btn = document.getElementById('btnSaveNewSubCategoriaInline');
+  const nome = (inp && inp.value || '').trim();
+  if (!nome) { alert('Informe o nome da nova sub-categoria.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const cats = loadCats();
+    const idx = cats.findIndex(c => c.nome === catNome);
+    if (idx < 0) { alert('Categoria pai não encontrada.'); return; }
+    const subs = cats[idx].subs || [];
+    const existing = subs.find(s => {
+      const sn = typeof s === 'string' ? s : s.nome;
+      return (sn || '').toLowerCase() === nome.toLowerCase();
+    });
+    if (existing) {
+      cancelNewSubCategoriaInline();
+      const subSel = document.getElementById('fSubCategoria');
+      if (subSel) subSel.value = (typeof existing === 'string' ? existing : existing.nome);
+      alert('Essa sub-categoria já existe — selecionei ela pra você.');
+      return;
+    }
+    cats[idx].subs = [...subs, { id: 'sub_' + Date.now(), nome, desc: '' }];
+    saveCats(cats);
+    onCatChange();
+    const subSel = document.getElementById('fSubCategoria');
+    if (subSel) subSel.value = nome;
+    cancelNewSubCategoriaInline();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+  }
+};

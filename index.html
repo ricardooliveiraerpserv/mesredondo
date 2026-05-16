@@ -2503,22 +2503,63 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       <!-- Categoria / Sub -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-row" style="margin:0">
-          <label>Categoria <span style="color:var(--red)">*</span></label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <label style="margin:0">Categoria <span style="color:var(--red)">*</span></label>
+            <button type="button" id="btnNewCategoriaInline" onclick="toggleNewCategoriaInline()"
+              style="background:rgba(74,240,160,0.10);border:1px solid rgba(74,240,160,0.45);color:#4af0a0;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:700;cursor:pointer">+ Nova</button>
+          </div>
           <input type="text" id="fCategoriaSearch" placeholder="🔍 Filtrar..." oninput="filterCatSelect()" autocomplete="off"
             style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:0.8rem;margin-bottom:3px;box-sizing:border-box">
           <select id="fCategoria" onchange="onCatChange()" size="4" data-manual-onchange="true"
             style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:0.8rem">
             <option value="">— Selecione —</option>
           </select>
+          <div id="newCategoriaInlineBox" style="display:none;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <input type="text" id="newCategoriaInlineNome" placeholder="Nome da nova categoria"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNewCategoriaInline();}"
+              style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);margin-bottom:6px;font-size:0.82rem;box-sizing:border-box">
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+              <input type="text" id="newCategoriaInlineIcone" placeholder="🏷️" maxlength="3"
+                style="width:46px;text-align:center;padding:6px 4px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.95rem">
+              <select id="newCategoriaInlineTipo"
+                style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.78rem">
+                <option value="despesa">↓ Despesa</option>
+                <option value="receita">↑ Receita</option>
+                <option value="ambos">↕ Ambos</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+              <button type="button" onclick="cancelNewCategoriaInline()"
+                style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 12px;cursor:pointer;font-size:0.74rem">Cancelar</button>
+              <button type="button" id="btnSaveNewCategoriaInline" onclick="salvarNewCategoriaInline()"
+                style="background:#4af0a0;border:none;color:#000;font-weight:700;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:0.74rem">Salvar</button>
+            </div>
+          </div>
         </div>
         <div class="form-row" style="margin:0">
-          <label>Sub-Categoria</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <label style="margin:0">Sub-Categoria</label>
+            <button type="button" id="btnNewSubCategoriaInline" onclick="toggleNewSubCategoriaInline()"
+              style="background:rgba(74,240,160,0.10);border:1px solid rgba(74,240,160,0.45);color:#4af0a0;border-radius:6px;padding:2px 9px;font-size:0.7rem;font-weight:700;cursor:pointer">+ Nova</button>
+          </div>
           <input type="text" id="fSubCatSearch" placeholder="🔍 Filtrar..." oninput="filterSubCatSelect()" autocomplete="off"
             style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:0.8rem;margin-bottom:3px;box-sizing:border-box">
           <select id="fSubCategoria" size="4" onchange="onSubCatChange()"
             style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:0.8rem">
             <option value="">— Nenhuma —</option>
           </select>
+          <div id="newSubCategoriaInlineBox" style="display:none;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <div id="newSubCategoriaInlineCatHint" style="font-size:0.7rem;color:var(--muted);margin-bottom:6px">Categoria pai: <strong id="newSubCategoriaInlineCatNome" style="color:var(--accent)">—</strong></div>
+            <input type="text" id="newSubCategoriaInlineNome" placeholder="Nome da nova sub-categoria"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNewSubCategoriaInline();}"
+              style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);margin-bottom:8px;font-size:0.82rem;box-sizing:border-box">
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+              <button type="button" onclick="cancelNewSubCategoriaInline()"
+                style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 12px;cursor:pointer;font-size:0.74rem">Cancelar</button>
+              <button type="button" id="btnSaveNewSubCategoriaInline" onclick="salvarNewSubCategoriaInline()"
+                style="background:#4af0a0;border:none;color:#000;font-weight:700;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:0.74rem">Salvar</button>
+            </div>
+          </div>
         </div>
       </div>
 
