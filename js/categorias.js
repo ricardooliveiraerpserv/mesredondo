@@ -59,10 +59,11 @@ async function updateProvSubcatSelect(preSelect) {
   const cats = loadCats();
   const cat = cats.find(c => c.nome === catNome);
   if (cat && cat.subs && cat.subs.length) {
+    const icPrefix = cat.icone ? cat.icone + ' ' : '';
     const subNomes = cat.subs.map(s => typeof s === 'string' ? s : s.nome).sort();
     subNomes.forEach(s => {
       const opt = document.createElement('option');
-      opt.value = s; opt.textContent = s;
+      opt.value = s; opt.textContent = icPrefix + s;
       subSel.appendChild(opt);
     });
   }
@@ -460,10 +461,11 @@ function onCatChange() {
   const cats = loadCats();
   const cat = cats.find(c => c.nome === catNome);
   if (cat && cat.subs.length) {
+    const icPrefix = cat.icone ? cat.icone + ' ' : '';
     const subsSorted = [...cat.subs].map(s => typeof s === 'string' ? s : s.nome).sort((a,b) => a.localeCompare(b, 'pt-BR'));
     subsSorted.forEach(sNome => {
       const opt = document.createElement('option');
-      opt.value = sNome; opt.textContent = sNome;
+      opt.value = sNome; opt.textContent = icPrefix + sNome;
       subSel.appendChild(opt);
     });
   }
@@ -504,10 +506,11 @@ function _populateSubcatFromAllCats(q, subSelId, filterType) {
     groupOpt.textContent = '── ' + (cat.icone ? cat.icone + ' ' : '') + cat.nome + ' ──';
     groupOpt.style.cssText = 'color:var(--accent);font-size:0.7rem;font-weight:700;letter-spacing:.05em;background:var(--surface2)';
     subSel.appendChild(groupOpt);
+    var icPrefix = cat.icone ? cat.icone + ' ' : '';
     matching.forEach(function(nome) {
       var opt = document.createElement('option');
       opt.value = nome;
-      opt.textContent = '  ' + nome;
+      opt.textContent = '  ' + icPrefix + nome;
       opt.dataset.catNome = cat.nome;
       subSel.appendChild(opt);
     });
