@@ -457,15 +457,21 @@ async function _onLogin(user, sessionToken) {
     const savedMes = parseInt((typeof _lsGet === 'function') ? (_lsGet('nav_mes') || '') : '') || null;
     const savedAno = parseInt((typeof _lsGet === 'function') ? (_lsGet('nav_ano') || '') : '') || null;
 
-    // Restaura mês/ano se salvos
+    // Restaura mês/ano se salvos. Respeita o _rangeFilter completo se já foi
+    // definido pelo initRangeFilter (cobre o caso de range custom DE/ATÉ
+    // diferente). currentMonth/Year são atualizados, mas não sobrescrevemos
+    // o range com mês único forçado.
     if (savedMes && savedAno) {
       currentMonth = savedMes;
       currentYear  = savedAno;
-      window._rangeFilter = { de: { mes: savedMes, ano: savedAno }, ate: { mes: savedMes, ano: savedAno } };
+      if (!window._rangeFilter) {
+        window._rangeFilter = { de: { mes: savedMes, ano: savedAno }, ate: { mes: savedMes, ano: savedAno } };
+      }
       try {
+        const rng = window._rangeFilter;
         const s = (v, id) => { const el = document.getElementById(id); if (el) el.value = v; };
-        s(savedMes, 'filterMonthDe'); s(savedMes, 'filterMonthAte');
-        s(savedAno, 'filterYearDe');  s(savedAno, 'filterYearAte');
+        s(rng.de.mes,  'filterMonthDe');  s(rng.ate.mes, 'filterMonthAte');
+        s(rng.de.ano,  'filterYearDe');   s(rng.ate.ano, 'filterYearAte');
       } catch(e) {}
     }
 

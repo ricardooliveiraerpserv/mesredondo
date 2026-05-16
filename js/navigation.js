@@ -46,6 +46,18 @@ function applyRangeFilter() {
   } else {
     window._rangeFilter = { de: { mes: mDe, ano: yDe }, ate: { mes: mAte, ano: yAte } };
   }
+  // Persiste o range completo pra restaurar no reload (cobre o caso do user
+  // escolher DE/ATÉ direto pelo select, não só pelas setinhas)
+  try {
+    _lsSet('nav_mes', window._rangeFilter.ate.mes);
+    _lsSet('nav_ano', window._rangeFilter.ate.ano);
+    _lsSet('nav_range_de_mes',  window._rangeFilter.de.mes);
+    _lsSet('nav_range_de_ano',  window._rangeFilter.de.ano);
+    _lsSet('nav_range_ate_mes', window._rangeFilter.ate.mes);
+    _lsSet('nav_range_ate_ano', window._rangeFilter.ate.ano);
+    currentMonth = window._rangeFilter.ate.mes;
+    currentYear  = window._rangeFilter.ate.ano;
+  } catch (e) {}
   ['vencFiltroCat','vencFiltroPag','filtroTerceiro'].forEach(id => {
     const sel = document.getElementById(id);
     if (sel) { while (sel.options.length > 1) sel.remove(1); }
@@ -113,7 +125,15 @@ function changeMonth(d) {
   const _validAno = Number.isFinite(savedAno) && savedAno >= 2000 && savedAno <= _yNow + 10;
   currentMonth = _validMes ? savedMes : (today.getMonth() + 1);
   currentYear  = _validAno ? savedAno : _yNow;
-  window._rangeFilter = { de: { mes: currentMonth, ano: currentYear }, ate: { mes: currentMonth, ano: currentYear } };
+  // Restaura range completo (DE/ATÉ) se foi salvo via applyRangeFilter
+  const _rngDeMes  = parseInt((typeof _lsGet === 'function' ? _lsGet('nav_range_de_mes')  : localStorage.getItem('nav_range_de_mes'))  || '', 10);
+  const _rngDeAno  = parseInt((typeof _lsGet === 'function' ? _lsGet('nav_range_de_ano')  : localStorage.getItem('nav_range_de_ano'))  || '', 10);
+  const _rngAteMes = parseInt((typeof _lsGet === 'function' ? _lsGet('nav_range_ate_mes') : localStorage.getItem('nav_range_ate_mes')) || '', 10);
+  const _rngAteAno = parseInt((typeof _lsGet === 'function' ? _lsGet('nav_range_ate_ano') : localStorage.getItem('nav_range_ate_ano')) || '', 10);
+  const _validRng = Number.isFinite(_rngDeMes) && Number.isFinite(_rngDeAno) && Number.isFinite(_rngAteMes) && Number.isFinite(_rngAteAno);
+  window._rangeFilter = _validRng
+    ? { de: { mes: _rngDeMes, ano: _rngDeAno }, ate: { mes: _rngAteMes, ano: _rngAteAno } }
+    : { de: { mes: currentMonth, ano: currentYear }, ate: { mes: currentMonth, ano: currentYear } };
   document.addEventListener('DOMContentLoaded', function() {
     // Mede altura do header para o sticky offset
     function setHeaderHeight() {
