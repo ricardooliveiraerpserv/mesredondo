@@ -100,6 +100,12 @@ var _memCache = {
 function _clearMemCache() {
   Object.keys(_memCache).forEach(function(k) { _memCache[k] = null; });
 }
+// Exposto em window porque sync-auth.js (carregado antes deste arquivo) chama
+// _clearMemCache() do _onLogin. Em alguns ambientes function declarations não
+// viram propriedade automática de window — explícito evita "is not defined"
+// que silenciosamente impedia o _loadAllData de rodar (causa do sumiço de
+// dados ao recarregar a página).
+window._clearMemCache = _clearMemCache;
 
 // Carrega config do banco e armazena no cache (chamado por _onLogin)
 async function _loadConfig() {

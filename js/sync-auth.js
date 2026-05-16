@@ -438,9 +438,13 @@ async function _onLogin(user, sessionToken) {
 
   // Carrega todos os dados do banco para memória via compat._loadAllData
   try {
-    _clearMemCache();
-    if (typeof window._loadAllData === 'function') await window._loadAllData();
-  } catch(e) { console.warn('[_onLogin] erro ao carregar dados:', e.message); }
+    if (typeof window._clearMemCache === 'function') window._clearMemCache();
+    if (typeof window._loadAllData === 'function') {
+      await window._loadAllData();
+    } else {
+      console.error('[_onLogin] window._loadAllData não está definida — dados não serão carregados');
+    }
+  } catch(e) { console.error('[_onLogin] erro ao carregar dados:', e.message, e); }
 
   _sbSetStatus('🟢 Conectado como ' + user.email, '#4ade80');
 
