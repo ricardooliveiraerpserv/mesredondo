@@ -112,12 +112,15 @@ function renderCartoesTab() {
 
   // All lancamentos that use a cartao pagamento in current month
   // Para cartões: usa l.mes/l.ano (mês da fatura), não o vencimento do boleto
-  // Espelhos de "Entrada Terceiro" herdam o pagamento da despesa original — não
-  // são gastos reais do cartão, então não devem aparecer aqui (caso contrário a
-  // mesma compra apareceria duas vezes: como Dívida de terceiros + como espelho).
+  // Espelhos "Entrada Terceiro" herdam o pagamento da despesa original — não
+  // são gastos reais do cartão. Filtramos pela categoria porque _espelhoDe
+  // não é persistido no Supabase (não está no _lancToDbRow), então só está
+  // presente na sessão da criação. A categoria 'Entrada Terceiro' é a
+  // identificação confiável do espelho após reload.
   const lancCartao = all.filter(l => {
     if (!isCartaoLanc(l)) return false;
     if (l._espelhoDe) return false;
+    if (l.categoria === 'Entrada Terceiro') return false;
     return _inRange(l);
   });
 
