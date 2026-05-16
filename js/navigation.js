@@ -101,11 +101,18 @@ function changeMonth(d) {
   renderCartoesTab();
 }
 
-// Inicializa range filter com mês atual
+// Inicializa range filter — restaura mês/ano salvos no localStorage (navMonth/
+// changeMonth gravam ali). Cai pra mês atual se for primeiro acesso, salvou
+// inválido ou está fora de um intervalo razoável (evita ficar preso em 2099).
 (function initRangeFilter() {
   const today = new Date();
-  currentMonth = today.getMonth() + 1;
-  currentYear  = today.getFullYear();
+  let savedMes = parseInt((typeof _lsGet === 'function' ? _lsGet('nav_mes') : localStorage.getItem('nav_mes')) || '', 10);
+  let savedAno = parseInt((typeof _lsGet === 'function' ? _lsGet('nav_ano') : localStorage.getItem('nav_ano')) || '', 10);
+  const _yNow = today.getFullYear();
+  const _validMes = Number.isFinite(savedMes) && savedMes >= 1 && savedMes <= 12;
+  const _validAno = Number.isFinite(savedAno) && savedAno >= 2000 && savedAno <= _yNow + 10;
+  currentMonth = _validMes ? savedMes : (today.getMonth() + 1);
+  currentYear  = _validAno ? savedAno : _yNow;
   window._rangeFilter = { de: { mes: currentMonth, ano: currentYear }, ate: { mes: currentMonth, ano: currentYear } };
   document.addEventListener('DOMContentLoaded', function() {
     // Mede altura do header para o sticky offset
