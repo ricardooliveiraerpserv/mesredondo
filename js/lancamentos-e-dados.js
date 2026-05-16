@@ -131,11 +131,78 @@ function renderTerceiroList() {
 }
 
 function populateTerceiroSelects() {
-  const list = loadTerceiros();
+  const list = loadTerceiros().slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   const opts = '<option value="">— Selecione —</option>' +
     list.map(t => `<option value="${t.nome}">👤 ${t.nome}</option>`).join('');
   const fTerc = document.getElementById('fTerceiro');
   if (fTerc) { const c = fTerc.value; fTerc.innerHTML = opts; fTerc.value = c; }
+}
+
+// Refresh assíncrono: puxa terceiros do servidor (Supabase) e re-popula o select.
+// Útil quando o cache em memória está velho (terceiros cadastrados em outro
+// dispositivo/sessão não aparecem) — disparado fire-and-forget ao abrir o modal.
+async function _refreshTerceirosCacheAndRepopulate() {
+  try {
+    if (typeof dbLoadTerceiros !== 'function') return;
+    const fresh = await dbLoadTerceiros();
+    if (Array.isArray(fresh) && typeof _memCache !== 'undefined') {
+      _memCache.terceiros = fresh;
+    }
+    populateTerceiroSelects();
+  } catch (e) {
+    console.warn('[_refreshTerceirosCacheAndRepopulate]', e && e.message);
+  }
+}
+
+// Inline: + Novo terceiro dentro do modal de lançamento
+function toggleNewTerceiroInline() {
+  const box = document.getElementById('newTerceiroInlineBox');
+  const btn = document.getElementById('btnNewTerceiroInline');
+  if (!box) return;
+  const isOpen = box.style.display !== 'none';
+  if (isOpen) cancelNewTerceiroInline();
+  else {
+    box.style.display = 'block';
+    if (btn) { btn.textContent = '× Cancelar'; btn.style.color = '#f87171'; btn.style.borderColor = 'rgba(248,113,113,0.45)'; btn.style.background = 'rgba(248,113,113,0.10)'; }
+    setTimeout(() => { const i = document.getElementById('newTerceiroInlineNome'); if (i) i.focus(); }, 40);
+  }
+}
+
+function cancelNewTerceiroInline() {
+  const box = document.getElementById('newTerceiroInlineBox');
+  const btn = document.getElementById('btnNewTerceiroInline');
+  const inp = document.getElementById('newTerceiroInlineNome');
+  if (box) box.style.display = 'none';
+  if (btn) { btn.textContent = '+ Novo'; btn.style.color = '#4af0a0'; btn.style.borderColor = 'rgba(74,240,160,0.45)'; btn.style.background = 'rgba(74,240,160,0.10)'; }
+  if (inp) inp.value = '';
+}
+
+async function salvarNewTerceiroInline() {
+  const inp = document.getElementById('newTerceiroInlineNome');
+  const btn = document.getElementById('btnSaveNewTerceiroInline');
+  const nome = (inp && inp.value || '').trim();
+  if (!nome) { alert('Informe o nome do terceiro.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const list = loadTerceiros();
+    const existing = list.find(t => (t.nome || '').toLowerCase() === nome.toLowerCase());
+    if (existing) {
+      const fTerc = document.getElementById('fTerceiro');
+      if (fTerc) fTerc.value = existing.nome;
+      cancelNewTerceiroInline();
+      alert('Esse terceiro já existe — selecionei ele pra você.');
+      return;
+    }
+    const entry = { id: 'terc_' + Date.now(), nome, tipo: 'ambos', obs: '' };
+    list.push(entry);
+    saveTerceiros(list);
+    populateTerceiroSelects();
+    const fTerc = document.getElementById('fTerceiro');
+    if (fTerc) fTerc.value = nome;
+    cancelNewTerceiroInline();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+  }
 }
 
 function openTerceiroModal() {
@@ -1260,6 +1327,11 @@ function openModal(id, _prefill) {
   const data = loadData();
   _filterCatsByTipo(tipoAtual);
   populateTerceiroSelects();
+  // Fire-and-forget: puxa terceiros frescos do servidor e repopula o select.
+  // Evita o caso de terceiros cadastrados em outra sessão não aparecerem
+  // por causa do cache em memória estar velho.
+  _refreshTerceirosCacheAndRepopulate();
+  cancelNewTerceiroInline();
   populatePagSelects();
   populateBancoSelects();
 

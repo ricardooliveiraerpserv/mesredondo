@@ -2538,10 +2538,25 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       <!-- Terceiro (só aparece para categorias de terceiros) -->
       <div id="fTerceiroRow" style="display:none">
         <div class="form-row" style="margin:0">
-          <label>👥 Terceiro <span style="color:var(--red)">*</span></label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label style="margin:0">👥 Terceiro <span style="color:var(--red)">*</span></label>
+            <button type="button" id="btnNewTerceiroInline" onclick="toggleNewTerceiroInline()"
+              style="background:rgba(74,240,160,0.10);border:1px solid rgba(74,240,160,0.45);color:#4af0a0;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer">+ Novo</button>
+          </div>
           <select id="fTerceiro" style="width:100%">
             <option value="">— Selecione o terceiro —</option>
           </select>
+          <div id="newTerceiroInlineBox" style="display:none;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <input type="text" id="newTerceiroInlineNome" placeholder="Nome do novo terceiro"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNewTerceiroInline();}"
+              style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);margin-bottom:8px;font-size:0.84rem">
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+              <button type="button" onclick="cancelNewTerceiroInline()"
+                style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:0.76rem">Cancelar</button>
+              <button type="button" id="btnSaveNewTerceiroInline" onclick="salvarNewTerceiroInline()"
+                style="background:#4af0a0;border:none;color:#000;font-weight:700;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:0.76rem">Salvar</button>
+            </div>
+          </div>
         </div>
       </div>
 
