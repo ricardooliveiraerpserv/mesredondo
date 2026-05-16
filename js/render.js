@@ -1952,10 +1952,11 @@ function calcProvisaoAcumulada() {
   if (!allProvsRaw.length) return { grupos: [], totProv: 0, totGasto: 0 };
 
   const allProvs = allProvsRaw.filter(p => {
+    // Provisões agora são SEMPRE por banco. Sem banco → não conta em nenhum
+    // contexto (esperar migração rodar; ver _migrateProvisoesSemBanco).
+    if (!p.banco) return false;
     const ctx = getBancoContexto();
-    if (!ctx) return true;
-    // Se orçamento não tem banco definido, sempre inclui (provisões são globais)
-    if (!p.banco) return true;
+    if (!ctx) return true; // sem filtro de banco → mostra todas
     if (ctx === 'consolidado') return getBancosConsolidadoIds().includes(p.banco);
     return p.banco === ctx;
   });

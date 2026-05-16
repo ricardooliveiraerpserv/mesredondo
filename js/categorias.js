@@ -109,6 +109,39 @@ function updateProvPreview() {
   preview.innerHTML = `<strong>${qtd}x</strong> de <strong style="color:var(--accent)">R$ ${val.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong> &nbsp;·&nbsp; ${parts.join(', ')} &nbsp;·&nbsp; até <strong>${lastStr}</strong> &nbsp;·&nbsp; Total: <strong style="color:var(--accent2)">R$ ${(val*qtd).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>`;
 }
 
+// Migração 1x: provisões antigas sem banco recebem o ID do Itaú.
+// Antes desta mudança, prov sem banco era tratada como "global" e aparecia
+// em todos os bancos. Agora exigimos banco obrigatório e atribuímos as
+// antigas ao Itaú (decisão do usuário em 2026-05-16).
+async function _migrateProvisoesSemBanco() {
+  if (localStorage.getItem('mf_provs_migrated_v1') === '1') return;
+  try {
+    const provs = (typeof loadProvisoes === 'function') ? loadProvisoes() : [];
+    const semBanco = provs.filter(p => !p.banco);
+    if (!semBanco.length) {
+      localStorage.setItem('mf_provs_migrated_v1', '1');
+      return;
+    }
+    const bancos = (typeof loadBancos === 'function') ? loadBancos() : [];
+    const stripAccents = s => (s || '').toLowerCase().normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+    const itau = bancos.find(b => stripAccents(b.nome).includes('itau'));
+    if (!itau) {
+      console.warn('[migrate-prov] Banco Itaú não encontrado — provisões sem banco mantidas até cadastrar.');
+      return; // não marca como migrado pra tentar de novo no próximo boot
+    }
+    const novas = provs.map(p => p.banco ? p : { ...p, banco: itau.id });
+    if (typeof saveProvisoes === 'function') saveProvisoes(novas);
+    localStorage.setItem('mf_provs_migrated_v1', '1');
+    console.log('[migrate-prov] migradas', semBanco.length, 'provisões sem banco para', itau.nome);
+  } catch (e) {
+    console.error('[migrate-prov]', e && e.message);
+  }
+}
+// Dispara após o app carregar dados (que populam _memCache.bancos/provisoes)
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(_migrateProvisoesSemBanco, 2000);
+});
+
 async function salvarProvisao() {
   const cat = document.getElementById('pCategoria').value.trim();
   const subCat = document.getElementById('pSubCategoria').value.trim();
