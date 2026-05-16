@@ -112,8 +112,12 @@ function renderCartoesTab() {
 
   // All lancamentos that use a cartao pagamento in current month
   // Para cartões: usa l.mes/l.ano (mês da fatura), não o vencimento do boleto
+  // Espelhos de "Entrada Terceiro" herdam o pagamento da despesa original — não
+  // são gastos reais do cartão, então não devem aparecer aqui (caso contrário a
+  // mesma compra apareceria duas vezes: como Dívida de terceiros + como espelho).
   const lancCartao = all.filter(l => {
     if (!isCartaoLanc(l)) return false;
+    if (l._espelhoDe) return false;
     return _inRange(l);
   });
 
