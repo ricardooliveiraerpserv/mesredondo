@@ -873,6 +873,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
           <button class="btn desktop-only" style="background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,0.35);color:var(--accent)" onclick="downloadTemplateImportacao()" title="Baixar planilha modelo com suas categorias, pagamentos e terceiros">⬇ Planilha Modelo</button>
           <button class="btn desktop-only" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="openImportModal()">⬆ Importar Fatura</button>
           <button class="btn desktop-only" style="background:var(--surface2);border:1px solid rgba(34,197,94,0.5);color:#22c55e" onclick="exportarExcel()">📊 Exportar Excel</button>
+          <button class="btn" style="background:rgba(64,144,240,0.10);border:1px solid rgba(64,144,240,0.45);color:#4090f0" onclick="openTransferModal()" title="Transferir valor entre bancos">↔ Transferência</button>
           <button class="btn btn-primary" onclick="openModal()">+ Novo</button>
         </div>
       </div>
@@ -1734,6 +1735,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       <div class="panel-header">
         <span class="panel-title">🏦 Bancos</span>
         <div style="display:flex;gap:8px">
+          <button onclick="openTransferModal()" style="padding:6px 14px;background:rgba(64,144,240,0.10);border:1px solid rgba(64,144,240,0.45);color:#4090f0;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif" title="Transferir valor entre bancos">↔ Transferência</button>
           <button onclick="openConsolidadoModal()" style="padding:6px 14px;background:rgba(240,192,64,0.10);border:1px solid rgba(240,192,64,0.40);color:var(--accent2);border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif">🔗 Consolidar</button>
           <button class="btn btn-primary" onclick="openBancoModal()">+ Novo</button>
         </div>
@@ -1915,6 +1917,40 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 </div>
 
 <!-- MODAL: TERCEIRO -->
+<!-- MODAL: TRANSFERÊNCIA ENTRE BANCOS -->
+<div class="modal-overlay" id="transferModalOverlay" style="z-index:1003">
+  <div class="modal" style="max-width:460px">
+    <h2 style="margin-bottom:14px">↔ Transferência entre bancos</h2>
+    <div class="form-row">
+      <label>De (banco origem) <span style="color:var(--red)">*</span></label>
+      <select id="tfBancoOrigem"><option value="">— Selecione —</option></select>
+    </div>
+    <div style="text-align:center;color:var(--muted);font-size:1.1rem;margin:-2px 0">↓</div>
+    <div class="form-row">
+      <label>Para (banco destino) <span style="color:var(--red)">*</span></label>
+      <select id="tfBancoDestino"><option value="">— Selecione —</option></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-row" style="margin:0">
+        <label>Valor (R$) <span style="color:var(--red)">*</span></label>
+        <input type="number" id="tfValor" placeholder="0,00" step="0.01" min="0">
+      </div>
+      <div class="form-row" style="margin:0">
+        <label>Data <span style="color:var(--red)">*</span></label>
+        <input type="date" id="tfData">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Descrição <span style="font-size:0.65rem;color:var(--muted);font-weight:400">(opcional)</span></label>
+      <input type="text" id="tfDesc" placeholder="Ex: Pagamento fatura, reserva..." maxlength="120">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeTransferModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvarTransfer" onclick="salvarTransferencia()">Transferir</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="terceiroModalOverlay" style="z-index:1002">
   <div class="modal" style="max-width:440px">
     <h2 id="terceiroModalTitle">Novo Terceiro</h2>
@@ -2853,6 +2889,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 <script src="js/bancos.js?v=202604052000"></script>
 <script src="js/categorias.js?v=202604052000"></script>
 <script src="js/lancamentos-e-dados.js?v=202604052000"></script>
+<script src="js/transferencias.js?v=202605160100"></script>
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
