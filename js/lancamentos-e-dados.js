@@ -131,9 +131,29 @@ function renderTerceiroList() {
 }
 
 function populateTerceiroSelects() {
-  const list = loadTerceiros().slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  // Cadastrados em mf_terceiros
+  const list = loadTerceiros();
+  const knownNomes = new Set(list.map(t => (t.nome || '').trim()).filter(Boolean));
+
+  // Terceiros "órfãos": presentes em lançamentos mas não cadastrados.
+  // Acontece quando o nome veio de import/xlsx, sync incompleto, ou foi
+  // editado direto no lançamento. Mostra mesmo assim pra não perder a opção.
+  const orfaos = new Set();
+  try {
+    const all = (typeof loadData === 'function') ? loadData() : [];
+    for (const l of all) {
+      const n = (l && l.terceiro || '').trim();
+      if (n && !knownNomes.has(n)) orfaos.add(n);
+    }
+  } catch (e) {}
+
+  const todos = [
+    ...list.map(t => ({ nome: t.nome, orfao: false })),
+    ...Array.from(orfaos).map(n => ({ nome: n, orfao: true })),
+  ].sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
   const opts = '<option value="">— Selecione —</option>' +
-    list.map(t => `<option value="${t.nome}">👤 ${t.nome}</option>`).join('');
+    todos.map(t => `<option value="${t.nome}">${t.orfao ? '⚠️' : '👤'} ${t.nome}</option>`).join('');
   const fTerc = document.getElementById('fTerceiro');
   if (fTerc) { const c = fTerc.value; fTerc.innerHTML = opts; fTerc.value = c; }
 }
