@@ -229,9 +229,11 @@ function _renderAll() {
   // Categorias fora do orçamento
   const CAT_TERCEIROS_REC  = 'Entrada Terceiro';
   const CAT_TERCEIROS_DESP = 'Dividas de terceiros';
+  const CAT_TRANSF_NOME    = 'Transferência';
   const isTerceiro = l => l.categoria === CAT_TERCEIROS_REC || l.categoria === CAT_TERCEIROS_DESP;
+  const isTransferencia = l => l.categoria === CAT_TRANSF_NOME;
 
-  const orcamento = all.filter(l => !isTerceiro(l));
+  const orcamento = all.filter(l => !isTerceiro(l) && !isTransferencia(l));
   const receitas  = orcamento.filter(l => l.tipo === 'receita');
   const despesas  = orcamento.filter(l => l.tipo === 'despesa');
   const totalR = receitas.reduce((s, l) => s + _valorExib(l), 0);
@@ -1044,8 +1046,13 @@ function deleteGroup(groupId, itemId, e) {
   } else {
     const groupItems = allData.filter(function(l) { return String(l.groupId) === String(groupId); });
     const count = groupItems.length;
+    const isTransf = String(groupId).startsWith('transf_');
+    const titulo = isTransf ? '↔ Excluir transferência' : '🗑 Excluir grupo';
+    const msg    = isTransf
+      ? 'Excluir esta transferência? Vão sair a saída do banco origem e a entrada do destino.'
+      : 'Excluir TODOS os ' + count + ' lançamentos deste grupo?';
     // Usa _showSimpleConfirm em vez de confirm() nativo — confirm() pode travar no mobile
-    _showSimpleConfirm('🗑 Excluir grupo', 'Excluir TODOS os ' + count + ' lançamentos deste grupo?', 'Excluir', 'var(--red)').then(function(ok) {
+    _showSimpleConfirm(titulo, msg, 'Excluir', 'var(--red)').then(function(ok) {
       if (!ok) return;
       groupItems.forEach(function(l) { _addTombstone(String(l.id)); });
       const _remainingData = allData.filter(function(l) { return String(l.groupId) !== String(groupId); });
@@ -1909,7 +1916,7 @@ function renderCatChart(despesas) {
 
   // — Receitas por Categoria —
   const allData = getMonthData();
-  const receitas = allData.filter(l => l.tipo === 'receita');
+  const receitas = allData.filter(l => l.tipo === 'receita' && l.categoria !== 'Transferência');
   const byRecCat = {};
   receitas.forEach(l => { const v=_valorExib(l); if (v > 0) byRecCat[l.categoria] = (byRecCat[l.categoria]||0) + v; });
   makeBars('catBarsReceitas', Object.entries(byRecCat));
