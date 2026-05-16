@@ -112,11 +112,11 @@ function onCatChangeTerceiro() {
       // Texto personalizado por categoria
       let msg = '';
       if (cat === 'Entrada Terceiro') {
-        msg = `<strong style="color:#4ade80">Entrada de terceiro</strong>: registra um valor que alguém te deve ou te pagou. <strong style="color:var(--text)">Não entra no saldo bancário nem na provisão</strong> — é um controle paralelo, visível na aba Terceiros.`;
+        msg = `<strong style="color:#4ade80">Entrada de terceiro</strong>: recebimento de um valor emprestado. <strong style="color:var(--text)">Soma no saldo do banco quando paga</strong> — fica fora dos cards de Receita/Despesa do mês.`;
       } else if (cat === 'Dividas de terceiros' || cat === 'Divida de terceiros') {
-        msg = `<strong style="color:#f87171">Dívida de terceiro</strong>: registra um valor que você emprestou ou que alguém te deve (saída). <strong style="color:var(--text)">Não deduz do saldo bancário nem da provisão</strong> — é um controle paralelo, visível na aba Terceiros.`;
+        msg = `<strong style="color:#f87171">Dívida de terceiro</strong>: dinheiro que você emprestou. <strong style="color:var(--text)">Sai do banco se à vista (status pago)</strong>. Cria um espelho pendente em Entrada Terceiro pro que falta receber.`;
       } else {
-        msg = `Esta categoria é de <strong style="color:#f59e0b">controle de terceiros</strong> e <strong style="color:var(--text)">não afeta o saldo bancário nem a provisão</strong>. Use-a para registrar empréstimos e dívidas entre pessoas.`;
+        msg = `Esta categoria é de <strong style="color:#f59e0b">controle de terceiros</strong>. Movimenta o saldo do banco quando paga, mas fica fora dos cards de Receita/Despesa do mês.`;
       }
       if (alertaTexto) alertaTexto.innerHTML = msg;
       alerta.style.display = 'block';

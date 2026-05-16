@@ -289,9 +289,9 @@ function onCatChangeTerceiro() {
     if (isTercCat) {
       let msg = '';
       if (cat === 'Entrada Terceiro') {
-        msg = `<strong style="color:#4ade80">Entrada de terceiro</strong>: registra um valor que alguém te deve. <strong style="color:var(--text)">Não entra no saldo bancário</strong> — controle paralelo, visível na aba Terceiros.`;
+        msg = `<strong style="color:#4ade80">Entrada de terceiro</strong>: dinheiro que entrou de um terceiro (recebimento de empréstimo). <strong style="color:var(--text)">Soma no saldo do banco quando marcada como paga</strong> — fica fora dos cards de Receita/Despesa do mês.`;
       } else {
-        msg = `<strong style="color:#f87171">Dívida de terceiro</strong>: registra um valor que você emprestou. <strong style="color:var(--text)">Não deduz do saldo bancário</strong> — controle paralelo, visível na aba Terceiros.`;
+        msg = `<strong style="color:#f87171">Dívida de terceiro</strong>: dinheiro que você emprestou. <strong style="color:var(--text)">Sai do banco se à vista (status pago)</strong>. O sistema cria um espelho pendente na Entrada Terceiro pra registrar o que falta receber.`;
       }
       if (alertaTexto) alertaTexto.innerHTML = msg;
       alerta.style.display = 'block';
@@ -1576,9 +1576,10 @@ function setTipo(t) {
 
 /**
  * Gera os espelhos de "Entrada Terceiro" para cada lançamento de despesa
- * com categoria "Dividas de terceiros". O espelho copia desc, valor,
- * data, vencimento, terceiro, banco, status e pagamento — apenas o
- * tipo e a categoria mudam (vira receita / Entrada Terceiro).
+ * com categoria "Dividas de terceiros". O espelho representa o valor a
+ * RECEBER de volta — fica sempre como 'pendente' até o terceiro pagar.
+ * Assim a despesa original deduz do banco normalmente; quando o usuário
+ * marcar o espelho como pago, ele soma de volta ao saldo.
  */
 function _criarEspelhosTerceiros(items) {
   const espelhos = [];
@@ -1591,6 +1592,7 @@ function _criarEspelhosTerceiros(items) {
         tipo: 'receita',
         categoria: 'Entrada Terceiro',
         subCategoria: 'Entrada Terceiro',
+        status: 'pendente',
         _ts: Date.now(),
         _espelhoDe: l.id,
       });
@@ -1598,6 +1600,38 @@ function _criarEspelhosTerceiros(items) {
   }
   return espelhos;
 }
+
+// Migração 1x: espelhos antigos eram criados com status=pago (cópia do
+// original), o que cancelava o efeito no saldo do banco. Decisão do
+// usuário em 2026-05-16: espelho passa a representar "a receber" e
+// sempre nasce pendente. Esta migração rebaixa para 'pendente' todos
+// os espelhos atualmente pagos, pra saldo do banco refletir a dívida
+// real. Usuário vai re-marcar como pago os que de fato já recebeu.
+window._migrateEspelhosTerceirosPendente = function () {
+  if (localStorage.getItem('mf_espelhos_terc_migrated_v1') === '1') return;
+  try {
+    const all = (typeof loadData === 'function') ? loadData() : [];
+    if (!all.length) return; // ainda não carregou — tenta depois
+    const ids = new Set();
+    const atualizados = all.map(l => {
+      if (l && l._espelhoDe && l.status === 'pago') {
+        ids.add(String(l.id));
+        return { ...l, status: 'pendente' };
+      }
+      return l;
+    });
+    if (!ids.size) {
+      localStorage.setItem('mf_espelhos_terc_migrated_v1', '1');
+      console.log('[migrate-espelhos] nenhum espelho pago — nada a migrar.');
+      return;
+    }
+    if (typeof saveData === 'function') saveData(atualizados);
+    localStorage.setItem('mf_espelhos_terc_migrated_v1', '1');
+    console.log('[migrate-espelhos] rebaixados', ids.size, 'espelhos pago→pendente.');
+  } catch (e) {
+    console.error('[migrate-espelhos]', e && e.message);
+  }
+};
 
 async function salvarLancamento() {
   const _btn = document.querySelector('button[onclick="salvarLancamento()"]');
