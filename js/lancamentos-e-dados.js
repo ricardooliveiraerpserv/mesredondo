@@ -484,6 +484,15 @@ function renderTerceirosTab() {
     return true;
   });
 
+  // Filtro rápido de status por botões (Todos/Pendente/Pago/Atrasado)
+  if (typeof window._applyStatusQuick === 'function') {
+    filtered = window._applyStatusQuick(filtered, window._tercStatusQuick);
+  }
+  const _tercBtns = document.getElementById('tercStatusBtns');
+  if (_tercBtns && typeof window._renderStatusBtns === 'function') {
+    _tercBtns.innerHTML = window._renderStatusBtns(window._tercStatusQuick, '_setTercStatus');
+  }
+
   // Reset bulk bar on re-render
   const _bar = document.getElementById('tercBulkBar');
   if (_bar) _bar.style.display = 'none';

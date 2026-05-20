@@ -131,7 +131,7 @@ function _renderStatusFilter(isRec) {
   var fn = isRec ? '_setAReceberStatus' : '_setAPagarStatus';
   var opts = [
     { v:'',              label:'Todos',                    cor:'var(--accent2)' },
-    { v:'pendente',      label:'Em aberto',                cor:'#f59e0b' },
+    { v:'pendente',      label:'Pendente',                 cor:'#f59e0b' },
     { v:'pago',          label: isRec ? 'Recebido':'Pago', cor:'var(--green)' },
     { v:'vencido_status',label:'Atrasado',                 cor:'#ef4444' }
   ];

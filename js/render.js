@@ -47,6 +47,58 @@ function getMesAno(l) {
   return { mes: l.mes, ano: l.ano };
 }
 
+// ── Filtro rápido de status por botões (Todos / Pendente / Pago / Atrasado) ──
+// Padrão usado em Lançamentos, Terceiros e A Pagar/A Receber.
+window._lancStatusQuick = window._lancStatusQuick || '';
+window._tercStatusQuick = window._tercStatusQuick || '';
+
+// HTML dos botões. fnName = nome global da função de clique.
+window._renderStatusBtns = function(currentVal, fnName) {
+  var opts = [
+    { v:'',               label:'Todos',    cor:'var(--accent2)' },
+    { v:'pendente',       label:'Pendente', cor:'#f59e0b' },
+    { v:'pago',           label:'Pago',     cor:'var(--green)' },
+    { v:'vencido_status', label:'Atrasado', cor:'#ef4444' },
+  ];
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap">' + opts.map(function(o) {
+    var ativo = (currentVal || '') === o.v;
+    return '<button onclick="'+fnName+'(\''+o.v+'\')" style="padding:5px 16px;border-radius:20px;border:1px solid '
+      + (ativo?o.cor:'var(--border)') + ';background:' + (ativo?o.cor+'22':'var(--surface2)') + ';color:'
+      + (ativo?o.cor:'var(--text2)') + ';font-size:0.75rem;font-weight:' + (ativo?'700':'400')
+      + ';cursor:pointer;transition:all 120ms">' + o.label + '</button>';
+  }).join('') + '</div>';
+};
+
+// Lançamento vencido = não pago E vencimento (ou data) anterior a hoje.
+window._isVencidoStatus = function(l) {
+  if (l.status === 'pago') return false;
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var ds = l.vencimento || l.data || '';
+  var vd = null;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)) { var p = ds.split('/'); vd = new Date(p[2]+'-'+p[1]+'-'+p[0]+'T00:00:00'); }
+  else if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) { vd = new Date(ds+'T00:00:00'); }
+  if (!vd || isNaN(vd)) return false;
+  return vd.getTime() < hoje.getTime();
+};
+
+// Aplica o filtro rápido de status a uma lista de lançamentos.
+window._applyStatusQuick = function(items, statusVal) {
+  if (!statusVal) return items;
+  if (statusVal === 'pago')           return items.filter(function(l){ return l.status === 'pago'; });
+  if (statusVal === 'pendente')       return items.filter(function(l){ return l.status !== 'pago'; });
+  if (statusVal === 'vencido_status') return items.filter(function(l){ return l.status !== 'pago' && window._isVencidoStatus(l); });
+  return items;
+};
+
+window._setLancStatus = function(v) {
+  window._lancStatusQuick = (window._lancStatusQuick === v) ? '' : v;
+  if (typeof renderAll === 'function') renderAll();
+};
+window._setTercStatus = function(v) {
+  window._tercStatusQuick = (window._tercStatusQuick === v) ? '' : v;
+  if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
+};
+
 
 // Helper: verifica se lançamento está no range filtrado
 function _inRange(l) {
@@ -318,6 +370,20 @@ function _renderAll() {
   const totalDivTer = dividaTerceiro.reduce((s, l) => s + _valorExib(l), 0);
   const saldoTer = totalEntTer - totalDivTer;
 
+  // Transferências do período (informativo — fora do orçamento). Conta cada
+  // transferência uma vez por groupId, independente de qual ponta está visível
+  // no filtro de banco atual (origem=saída, destino=entrada).
+  const transfLancs = all.filter(isTransferencia);
+  const _seenTransfG = new Set();
+  let totalTransfMes = 0;
+  transfLancs.forEach(l => {
+    const g = String(l.groupId || l.id);
+    if (_seenTransfG.has(g)) return;
+    _seenTransfG.add(g);
+    totalTransfMes += _valorExib(l);
+  });
+  const qtdTransfMes = _seenTransfG.size;
+
   const temProv = provs.length > 0;
 
   // Cards orçamento (null-safe para evitar throw se o DOM ainda não estiver pronto)
@@ -367,6 +433,20 @@ function _renderAll() {
     const _resIcon = document.getElementById('resultadoAlertaIcon');
     if (_resIcon) _resIcon.style.display = !_resPos ? 'inline' : 'none';
   }
+  // Linha de transferências do período no card de saldo (informativo)
+  const _transfRow = document.getElementById('transfMesRow');
+  if (_transfRow) {
+    if (qtdTransfMes > 0) {
+      _transfRow.style.display = 'flex';
+      const _tv = document.getElementById('transfMesValor');
+      if (_tv) _tv.textContent = fmt(totalTransfMes);
+      const _tq = document.getElementById('transfMesQtd');
+      if (_tq) _tq.textContent = '· ' + qtdTransfMes + (qtdTransfMes === 1 ? ' movimentação' : ' movimentações');
+    } else {
+      _transfRow.style.display = 'none';
+    }
+  }
+
   // Renderizar insights
   _renderInsights(saldo, totalR, totalDCard);
 
@@ -1553,6 +1633,13 @@ function renderAllTable() {
     if (!_matchValor(l.valor, _filtroValorRaw)) return false;
     return true;
   });
+
+  // Filtro rápido de status por botões (Todos/Pendente/Pago/Atrasado)
+  filtered = window._applyStatusQuick(filtered, window._lancStatusQuick);
+
+  // Renderiza os botões de status no container da aba Lançamentos
+  const _lancBtns = document.getElementById('lancStatusBtns');
+  if (_lancBtns) _lancBtns.innerHTML = window._renderStatusBtns(window._lancStatusQuick, '_setLancStatus');
 
   filtered = sortItems(filtered);
   updateSortHeaders();
