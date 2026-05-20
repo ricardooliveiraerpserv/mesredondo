@@ -204,12 +204,20 @@ async function _mobileRefresh(btn) {
 }
 
 // ── Tela de login ────────────────────────────────────
+// Overlay de carregamento — esconde o "flash de 0" enquanto _loadAllData
+// busca os dados do Supabase (cache em memória nasce vazio no F5).
+function _showAppLoading(show) {
+  const el = document.getElementById('app-loading');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+
 function _showAuthScreen(show) {
   const s = document.getElementById('auth-screen');
   const h = document.querySelector('header');
   const m = document.querySelector('main');
   const sb = document.getElementById('sb-bar');
   if (show) {
+    _showAppLoading(false); // tela de auth nunca convive com overlay de loading
     s.style.display = 'flex';
     if (h) h.style.display = 'none';
     if (m) m.style.display = 'none';
@@ -406,6 +414,7 @@ async function _onLogin(user, sessionToken) {
   _upsertUsuario(user).catch(() => {});
 
   _showAuthScreen(false);
+  _showAppLoading(true); // cobre o app até os dados chegarem (evita flash de 0)
 
   // Atualiza UI do header
   const userInfo  = document.getElementById('user-info');
@@ -494,6 +503,9 @@ async function _onLogin(user, sessionToken) {
       sidebarDashBtn.classList.add('active');
     }
   } catch(e) {}
+
+  // Dados carregados e render concluído — remove o overlay de loading
+  _showAppLoading(false);
 
   // Show welcome modal para usuários sem lançamentos
   try {

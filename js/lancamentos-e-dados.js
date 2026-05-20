@@ -1601,6 +1601,66 @@ function _criarEspelhosTerceiros(items) {
   return espelhos;
 }
 
+// Exporta os terceiros para Excel respeitando EXATAMENTE os mesmos filtros
+// aplicados na aba (renderTerceirosTab). Reimplementado aqui porque terceiros.js
+// não é carregado no index.html — a versão de lá referenciava função inexistente.
+window.exportarExcelTerceiros = function () {
+  if (typeof XLSX === 'undefined') { alert('Biblioteca Excel não carregada.'); return; }
+
+  // Mesma derivação de filtros do renderTerceirosTab (card filter > FSEL)
+  const _cf = window._tercCardFilter;
+  const nomeF   = _cf ? [_cf.nome] : (window.FSEL ? FSEL.getValues('filtroTerceiroNome') : []);
+  const tipoF   = _cf ? (_cf.tipo && _cf.tipo !== 'todos' ? [_cf.tipo] : []) : (window.FSEL ? FSEL.getValues('filtroTerceiroTipo') : []);
+  const statusF = window.FSEL ? FSEL.getValues('filtroTerceiroStatus') : [];
+  const subCatF = window.FSEL ? FSEL.getValues('filtroTerceiroSubCat') : [];
+  const pagF    = window.FSEL ? FSEL.getValues('filtroTerceiroPag')    : [];
+  const bancoF  = window.FSEL ? FSEL.getValues('filtroTerceiroBanco')  : [];
+  const descF   = (document.getElementById('filtroTerceiroDesc')?.value || '').toLowerCase();
+
+  const filtered = loadDataBanco().filter(l => {
+    if (!CAT_TERC_SET.has(l.categoria)) return false;
+    if (!_inRange(l)) return false;
+    if (nomeF.length   && !nomeF.includes(l.terceiro||'')) return false;
+    if (tipoF.length && !tipoF.includes('')) {
+      const wantEnt = tipoF.includes('entrada');
+      const wantDiv = tipoF.includes('divida');
+      if (wantEnt && !wantDiv && l.categoria !== 'Entrada Terceiro') return false;
+      if (wantDiv && !wantEnt && l.categoria !== 'Dividas de terceiros') return false;
+    }
+    if (statusF.length && !statusF.includes(l.status)) return false;
+    if (subCatF.length && !subCatF.includes(l.subCategoria||'')) return false;
+    if (pagF.length    && !pagF.includes(l.pagamento||'')) return false;
+    if (bancoF.length  && !bancoF.includes(l.banco||'')) return false;
+    if (descF && !((l.desc||'')+(l.terceiro||'')+(l.pagamento||'')).toLowerCase().includes(descF)) return false;
+    return true;
+  });
+
+  if (!filtered.length) { alert('Nenhum lançamento para exportar.'); return; }
+
+  const fmtDate = d => d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split('-').reverse().join('/') : (d||'');
+  const bancoNome = id => { const b = (loadBancos()||[]).find(x => x.id === id); return b ? (b.icone||'🏦')+' '+b.nome : ''; };
+  const rows = filtered.map(l => ({
+    'Data': fmtDate(l.data),
+    'Vencimento': l.vencimento||'',
+    'Terceiro': l.terceiro||'',
+    'Descrição': (l.desc||'').replace(/\s*\(\d+\/\d+\)\s*$/,''),
+    'Parcela': l.parcAtual ? l.parcAtual+'/'+l.parcTotal : '',
+    'Categoria': l.categoria||'',
+    'Sub-categoria': l.subCategoria||'',
+    'Tipo': l.tipo==='receita'?'Entrada':'Dívida',
+    'Status': l.status||'',
+    'Banco': bancoNome(l.banco),
+    'Pagamento': l.pagamento||'',
+    'Valor (R$)': l.tipo==='receita' ? _valorExib(l) : -_valorExib(l),
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:12},{wch:20},{wch:38},{wch:10},{wch:20},{wch:20},{wch:10},{wch:14},{wch:20},{wch:18},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Terceiros');
+  const _hoje = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `MeuFinanceiro_Terceiros_${_hoje}.xlsx`);
+};
+
 // Migração 1x: espelhos antigos eram criados com status=pago (cópia do
 // original), o que cancelava o efeito no saldo do banco. Decisão do
 // usuário em 2026-05-16: espelho passa a representar "a receber" e

@@ -496,6 +496,15 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
   </div>
 </div>
 
+<!-- Overlay de carregamento — cobre o app enquanto _loadAllData busca do Supabase,
+     evita o "flash de 0" (cache em memória nasce vazio no F5). Removido após o
+     primeiro render com dados (ver _onLogin em sync-auth.js). -->
+<div id="app-loading" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9998;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+  <img src="logo.png" width="56" height="56" style="border-radius:50%;display:block;animation:_appLoadPulse 1.4s ease-in-out infinite;"/>
+  <div style="font-size:0.82rem;color:var(--text2);font-family:var(--font);letter-spacing:0.02em;">Carregando seus dados…</div>
+</div>
+<style>@keyframes _appLoadPulse{0%,100%{opacity:.45;transform:scale(.96)}50%{opacity:1;transform:scale(1.04)}}</style>
+
 <header>
 
   <!-- LINHA 1: Logo + Nav Tabs -->
@@ -2879,7 +2888,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 <!-- ═══════════ MÓDULOS JS ═══════════ -->
 
 <!-- 1. Auth + API REST Supabase -->
-<script src="js/sync-auth.js?v=202604202345"></script>
+<script src="js/sync-auth.js?v=202605201230"></script>
 <script src="js/db.js?v=202604052000"></script>
 
 <!-- 2. Cache em memória + compatibilidade síncrona para scripts legados -->
@@ -2888,7 +2897,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 <!-- 3. Módulos de dados (substituídos) -->
 <script src="js/bancos.js?v=202604052000"></script>
 <script src="js/categorias.js?v=202604052000"></script>
-<script src="js/lancamentos-e-dados.js?v=202604052000"></script>
+<script src="js/lancamentos-e-dados.js?v=202605201230"></script>
 <script src="js/transferencias.js?v=202605160100"></script>
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
