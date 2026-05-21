@@ -796,6 +796,30 @@ function renderTable(tbodyId, items) {
   updateBulkBar();
 }
 
+// Re-renderiza a aba atualmente visível após uma mudança de dados.
+// toggleStatusLanc é disparado de várias abas (Lançamentos, Vencimentos,
+// Terceiros, Parcelados, Dashboard, A Pagar/A Receber). Antes só chamava
+// renderAllTable() — que atualiza apenas a tabela principal de Lançamentos —
+// então o botão "parecia não funcionar" nas outras abas: o status mudava no
+// cache/banco mas a view visível não refletia.
+function _rerenderActiveView() {
+  // renderAll() cobre dashboard, cards de banco, provisão E a tabela principal.
+  if (typeof renderAll === 'function') { try { renderAll(); } catch (e) { console.error('[_rerenderActiveView] renderAll', e); } }
+  var active = document.querySelector('.tab-content.active');
+  var tab = active ? active.id.replace('tab-', '') : '';
+  var extraFn = {
+    terceiros:   'renderTerceirosTab',
+    parcelados:  'renderParceladosTab',
+    vencimentos: 'renderVencimentosTab',
+    cartoes:     'renderCartoesTab',
+    areceber:    'renderAReceberTab',
+    apagar:      'renderAPagarTab'
+  }[tab];
+  if (extraFn && typeof window[extraFn] === 'function') {
+    try { window[extraFn](); } catch (e) { console.error('[_rerenderActiveView] ' + extraFn, e); }
+  }
+}
+
 function toggleStatusLanc(id, novoStatus) {
   // Atualização otimista: reflete na UI imediatamente, persiste no banco em paralelo.
   // Não chama carregarApp() — um reload completo por clique de status é excessivo
@@ -803,14 +827,14 @@ function toggleStatusLanc(id, novoStatus) {
   _memCache.lancamentos = (_memCache.lancamentos || []).map(
     function(l) { return String(l.id) === String(id) ? Object.assign({}, l, { status: novoStatus }) : l; }
   );
-  renderAllTable();
+  _rerenderActiveView();
   dbUpdateLancamento(id, { status: novoStatus }).catch(function(e) {
     console.error('[toggleStatusLanc] falha no banco, revertendo:', e.message);
     // Reverte cache e re-renderiza se persistência falhou
     _memCache.lancamentos = (_memCache.lancamentos || []).map(
       function(l) { return String(l.id) === String(id) ? Object.assign({}, l, { status: novoStatus === 'pago' ? 'pendente' : 'pago' }) : l; }
     );
-    renderAllTable();
+    _rerenderActiveView();
   });
 }
 
@@ -1259,17 +1283,28 @@ function bulkApply() {
   if (newSub)    changes.push('sub-categoria → ' + newSub);
   if (newBanco)  { const b = loadBancos().find(x=>x.id===newBanco); changes.push('banco → ' + (b?(b.icone||'🏦')+' '+b.nome:newBanco)); }
   if (!confirm('Aplicar em ' + ids.length + ' lançamento(s):\n' + changes.join('\n') + '?')) return;
-  const allData = loadData();
-  const updated = allData.map(l => {
-    if (!ids.includes(String(l.id))) return l;
-    return Object.assign({}, l,
-      newStatus ? {status: newStatus} : {},
-      newCat    ? {categoria: newCat, subCategoria: newSub || l.subCategoria} : {},
-      (!newCat && newSub) ? {subCategoria: newSub} : {},
-      newBanco  ? {banco: newBanco} : {}
+
+  // Persiste cada alteração via dbUpdateLancamento (UPDATE real no Supabase).
+  // NÃO usar saveData(): ele só persiste inserts/deletes — alterações de campo
+  // (status, categoria, banco) ficavam só no cache em memória e sumiam no reload.
+  const idSet = new Set(ids.map(String));
+  const patches = {}; // id -> patch aplicado
+  _memCache.lancamentos = (_memCache.lancamentos || []).map(function(l) {
+    if (!idSet.has(String(l.id))) return l;
+    const patch = Object.assign({},
+      newStatus ? { status: newStatus } : {},
+      newCat    ? { categoria: newCat, subCategoria: newSub || l.subCategoria } : {},
+      (!newCat && newSub) ? { subCategoria: newSub } : {},
+      newBanco  ? { banco: newBanco } : {}
     );
+    patches[String(l.id)] = patch;
+    return Object.assign({}, l, patch);
   });
-  saveData(updated);
+  Object.keys(patches).forEach(function(id) {
+    dbUpdateLancamento(id, patches[id]).catch(function(e) {
+      console.error('[bulkApply] falha ao persistir', id, e.message);
+    });
+  });
   bulkClear();
   safeRender(() => renderAll());
 }
@@ -1661,6 +1696,31 @@ function renderAllTable() {
   if (elDesp)  elDesp.textContent  = fmt(fD);
   if (elRec)   elRec.textContent   = fmt(fR);
   if (elSaldo) { elSaldo.textContent = (saldo >= 0 ? '+' : '-') + fmt(Math.abs(saldo)); elSaldo.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)'; }
+
+  // ── Cards de pendentes (independentes dos filtros de status/busca) ──────────
+  // Mostra recebimentos e pagamentos ainda não quitados no período/banco atual.
+  // Exclui categorias de terceiros para casar com os totais de A Pagar/A Receber.
+  (function _renderLancPendentes() {
+    var cont = document.getElementById('lancPendentesCards');
+    if (!cont) return;
+    var EXCL = ['Entrada Terceiro', 'Dividas de terceiros', 'Transferência'];
+    var pend = all.filter(function(l) { return l.status !== 'pago' && EXCL.indexOf(l.categoria || '') < 0; });
+    var recItens  = pend.filter(function(l) { return l.tipo === 'receita'; });
+    var despItens = pend.filter(function(l) { return l.tipo === 'despesa'; });
+    var recPend  = recItens.reduce(function(s, l) { return s + (l.valor || 0); }, 0);
+    var despPend = despItens.reduce(function(s, l) { return s + (l.valor || 0); }, 0);
+    var vencDesp = despItens.filter(function(l) { return window._isVencidoStatus(l); }).reduce(function(s, l) { return s + (l.valor || 0); }, 0);
+    var quickPend = window._lancStatusQuick === 'pendente';
+    function card(cor, icone, label, valor, qtd, sub) {
+      return '<div class="card sm" style="border-top:3px solid ' + cor + ';cursor:pointer;' + (quickPend ? 'box-shadow:0 0 0 2px ' + cor + ';' : '') + '" onclick="_setLancStatus(\'pendente\')" title="Filtrar pendentes">'
+        + '<div class="card-header"><span class="card-label" style="color:' + cor + '">' + icone + ' ' + label + '</span></div>'
+        + '<div class="card-value" style="color:' + cor + '">' + valor + '</div>'
+        + '<div class="card-footer"><span class="card-sub">' + qtd + (sub ? ' · ' + sub : '') + '</span></div></div>';
+    }
+    cont.innerHTML =
+      card('var(--green)', '📥', 'Recebimentos pendentes', '+' + fmt(recPend), recItens.length + ' a receber', '') +
+      card('var(--red)',   '📤', 'Pagamentos pendentes',   '-' + fmt(despPend), despItens.length + ' a pagar', vencDesp > 0 ? ('🔴 ' + fmt(vencDesp) + ' vencido') : '');
+  })();
 
   // Mostra/esconde botão limpar filtros
   var hasFilter = (busca.length > 0) || tipo.length || status.length || cat.length || subCat.length || tipoLanc.length || pagFiltro.length || tercFiltro.length;

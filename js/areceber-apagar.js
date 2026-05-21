@@ -361,6 +361,43 @@ async function _excluirSelecionadosAP(isRec) {
   safeRender(function(){ renderAll(); renderFn(); });
 }
 
+// Marca/desmarca em massa os selecionados como pago/pendente.
+// novoStatus: 'pago' (default) | 'pendente'
+async function _pagarSelecionadosAP(isRec, novoStatus) {
+  var ids = isRec ? _aReceberSelecionados.slice() : _aPagarSelecionados.slice();
+  if (!ids || !ids.length) return;
+  novoStatus = novoStatus || 'pago';
+  var verbo = novoStatus === 'pago' ? (isRec ? 'marcar como recebido' : 'marcar como pago') : 'marcar como pendente';
+  if (typeof _showSimpleConfirm === 'function') {
+    var ok = await _showSimpleConfirm(
+      '✓ Confirmar',
+      'Deseja ' + verbo + ' os ' + ids.length + ' itens selecionados?',
+      'Confirmar',
+      novoStatus === 'pago' ? 'var(--green)' : 'var(--accent2)'
+    );
+    if (!ok) return;
+  }
+  var idSet = new Set(ids.map(String));
+  // Atualização otimista no cache
+  if (_memCache.lancamentos) {
+    _memCache.lancamentos = _memCache.lancamentos.map(function(l) {
+      return idSet.has(String(l.id)) ? Object.assign({}, l, { status: novoStatus }) : l;
+    });
+  }
+  // Persiste cada um (UPDATE real no Supabase)
+  ids.forEach(function(id) {
+    if (typeof dbUpdateLancamento === 'function') {
+      dbUpdateLancamento(id, { status: novoStatus }).catch(function(e) {
+        console.error('[_pagarSelecionadosAP]', e.message);
+      });
+    }
+  });
+  if (isRec) _aReceberSelecionados = [];
+  else _aPagarSelecionados = [];
+  var renderFn = isRec ? renderAReceberTab : renderAPagarTab;
+  safeRender(function(){ renderAll(); renderFn(); });
+}
+
 function _toggleSelAP(id, isRec) {
   var arr = isRec ? _aReceberSelecionados : _aPagarSelecionados;
   var sid = String(id);

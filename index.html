@@ -892,6 +892,8 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
           <button class="btn btn-primary" onclick="openModal()">+ Novo</button>
         </div>
       </div>
+      <!-- Cards de pendentes (recebimentos/pagamentos a quitar no período) -->
+      <div id="lancPendentesCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px"></div>
       <!-- Filtro rápido de status por botões (Todos/Pendente/Pago/Atrasado) -->
       <div id="lancStatusBtns" style="margin-bottom:10px"></div>
       <div class="filters">
@@ -1441,10 +1443,12 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
     </div>
 
     <!-- Barra ação em massa -->
-    <div id="aReceberBulkBar" style="display:none;align-items:center;gap:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 14px;margin-bottom:10px">
+    <div id="aReceberBulkBar" style="display:none;align-items:center;gap:10px;background:rgba(48,208,128,0.08);border:1px solid rgba(48,208,128,0.3);border-radius:8px;padding:8px 14px;margin-bottom:10px;flex-wrap:wrap">
       <span class="ap-bulk-count" style="font-size:0.82rem;color:var(--text);font-weight:600"></span>
+      <button onclick="_pagarSelecionadosAP(true,'pago')" style="background:rgba(48,208,128,0.15);border:1px solid var(--green);color:var(--green);border-radius:6px;padding:5px 14px;font-size:0.78rem;font-weight:700;cursor:pointer">✓ Receber selecionados</button>
+      <button onclick="_pagarSelecionadosAP(true,'pendente')" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 12px;font-size:0.78rem;cursor:pointer">↩ Marcar pendente</button>
       <button onclick="_excluirSelecionadosAP(true)" style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 14px;font-size:0.78rem;font-weight:700;cursor:pointer">🗑 Excluir selecionados</button>
-      <button onclick="_aReceberSelecionados=[];renderAReceberTab()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:0.78rem;cursor:pointer">✕ Cancelar</button>
+      <button onclick="_aReceberSelecionados=[];renderAReceberTab()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:0.78rem;cursor:pointer;margin-left:auto">✕ Cancelar</button>
     </div>
 
     <!-- Header -->
@@ -1512,10 +1516,12 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
     </div>
 
     <!-- Barra ação em massa -->
-    <div id="aPagarBulkBar" style="display:none;align-items:center;gap:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 14px;margin-bottom:10px">
+    <div id="aPagarBulkBar" style="display:none;align-items:center;gap:10px;background:rgba(240,80,96,0.08);border:1px solid rgba(240,80,96,0.3);border-radius:8px;padding:8px 14px;margin-bottom:10px;flex-wrap:wrap">
       <span class="ap-bulk-count" style="font-size:0.82rem;color:var(--text);font-weight:600"></span>
+      <button onclick="_pagarSelecionadosAP(false,'pago')" style="background:rgba(240,80,96,0.15);border:1px solid var(--red);color:var(--red);border-radius:6px;padding:5px 14px;font-size:0.78rem;font-weight:700;cursor:pointer">✓ Pagar selecionados</button>
+      <button onclick="_pagarSelecionadosAP(false,'pendente')" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 12px;font-size:0.78rem;cursor:pointer">↩ Marcar pendente</button>
       <button onclick="_excluirSelecionadosAP(false)" style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 14px;font-size:0.78rem;font-weight:700;cursor:pointer">🗑 Excluir selecionados</button>
-      <button onclick="_aPagarSelecionados=[];renderAPagarTab()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:0.78rem;cursor:pointer">✕ Cancelar</button>
+      <button onclick="_aPagarSelecionados=[];renderAPagarTab()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:0.78rem;cursor:pointer;margin-left:auto">✕ Cancelar</button>
     </div>
 
     <!-- Header -->
@@ -2914,10 +2920,10 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202605201600"></script>
+<script src="js/render.js?v=202605211230"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
-<script src="js/areceber-apagar.js?v=202605201600"></script>
+<script src="js/areceber-apagar.js?v=202605211230"></script>
     <script src="js/cartoes-config.js?v=202604210055"></script>
 
 <!-- 5. FSEL por último (define _initApp, chamado após login) -->
