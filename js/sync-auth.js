@@ -582,6 +582,22 @@ function adminSelectRole(role) {
   }
 }
 
+// Traduz mensagens de erro comuns do Supabase Auth pro português
+function _translateAuthError(msg) {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('already registered') || m.includes('already been registered') || m.includes('already exists'))
+    return 'Este e-mail já está cadastrado.';
+  if (m.includes('invalid email') || m.includes('email address') && m.includes('invalid'))
+    return 'E-mail inválido.';
+  if (m.includes('password should be at least'))
+    return 'A senha precisa ter ao menos 6 caracteres.';
+  if (m.includes('rate limit') || m.includes('too many'))
+    return 'Muitas tentativas. Aguarde alguns instantes e tente de novo.';
+  if (m.includes('signup') && m.includes('disabled'))
+    return 'Cadastro de novos usuários está desativado no projeto.';
+  return msg || 'Erro desconhecido.';
+}
+
 async function adminCreateUser() {
   const name     = document.getElementById('admin-new-name').value.trim();
   const email    = document.getElementById('admin-new-email').value.trim();
@@ -592,6 +608,13 @@ async function adminCreateUser() {
   if (!password)           { _adminMsg('⚠️ Preencha a senha.', false); return; }
   if (password.length < 6) { _adminMsg('⚠️ Senha precisa ter ao menos 6 caracteres.', false); return; }
 
+  // Checagem prévia: e-mail já existe na lista carregada → erro claro sem round-trip
+  const jaExiste = (_adminUsersCache || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+  if (jaExiste) {
+    _adminMsg('⚠️ Já existe um usuário com este e-mail (' + email + ').', false);
+    return;
+  }
+
   _adminMsg('🔄 Criando usuário...', null);
 
   const { data, error } = await _sbClient.auth.signUp({
@@ -599,7 +622,7 @@ async function adminCreateUser() {
     options: { data: { role, name: name || email.split('@')[0], full_name: name || email.split('@')[0] } }
   });
 
-  if (error) { _adminMsg('❌ Erro: ' + error.message, false); return; }
+  if (error) { _adminMsg('❌ ' + _translateAuthError(error.message), false); return; }
 
   // Registra na tabela mf_usuarios
   if (data?.user?.id) {
