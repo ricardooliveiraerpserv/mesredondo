@@ -936,16 +936,17 @@ async function adminSavePassword() {
     const isMe = uid === _currentUser.id;
     if (isMe) {
       const { error } = await _sbClient.auth.updateUser({ password: pass });
-      if (error) { _adminEditMsg('❌ ' + error.message, false); return; }
+      if (error) { _adminEditMsg('❌ ' + _translateAuthError(error.message), false); return; }
     } else {
-      const res = await fetch(SB_URL + '/auth/v1/admin/users/' + uid, {
-        method: 'PUT',
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pass })
+      // Senha de outro usuário exige service_role → Edge Function admin-set-password
+      const res = await fetch(SB_URL + '/functions/v1/admin-set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ user_id: uid, password: pass })
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        _adminEditMsg('❌ ' + (err.message || 'Erro. API Admin requerida.'), false); return;
+        _adminEditMsg('❌ ' + _translateAuthError(err.error || 'Não foi possível alterar a senha. Verifique se a função admin-set-password está publicada.'), false); return;
       }
     }
     _adminEditMsg('✅ Senha alterada!', true);
