@@ -88,23 +88,30 @@
         e.preventDefault();
         var v = this.getAttribute('data-val');
         var st = _getState(selId);
+        // valores reais = todas as opções exceto o pseudo-item "Todos" (value='')
+        var realVals = opts.filter(function(o){ return o.value !== ''; })
+                           .map(function(o){ return o.value; });
+        var isAll    = st.size === 0;
+        var isNenhum = st.size === 1 && st.has('__nenhum__');
         if(v === ''){
-          if(st.size === 0){
-            _state[selId] = new Set(['__nenhum__']);
-          } else {
-            _state[selId] = new Set();
-          }
+          // Clique no item "Todos": alterna entre todos e nenhum
+          _state[selId] = isAll ? new Set(['__nenhum__']) : new Set();
+        } else if(isAll){
+          // Estado "Todos": desmarca SÓ o clicado, mantendo o resto selecionado
+          var ns = new Set(realVals);
+          ns.delete(v);
+          _state[selId] = ns;
+        } else if(isNenhum){
+          // Estado "Nenhum": marca só o clicado
+          _state[selId] = new Set([v]);
         } else {
-          if(st.size === 0){
-            _state[selId] = new Set([v]);
+          // Seleção parcial: alterna o item clicado
+          if(st.has(v)) st.delete(v); else st.add(v);
+          // Se todos os reais ficaram marcados, volta ao estado canônico "Todos"
+          if(realVals.length && realVals.every(function(x){ return st.has(x); })){
+            _state[selId] = new Set();
           } else {
-            if(st.has(v)){
-              st.delete(v);
-              _state[selId] = st.size > 0 ? st : new Set();
-            } else {
-              st.add(v);
-              _state[selId] = st;
-            }
+            _state[selId] = st.size > 0 ? st : new Set();
           }
         }
         _renderChips(selId, opts);
