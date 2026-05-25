@@ -648,6 +648,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
             <span class="crh-sub-item">Rec. <span class="g" id="saldoRecRef">R$ 0</span></span>
             <span class="crh-sub-item">Desp. <span class="r" id="saldoDespRef">R$ 0</span></span>
           </div>
+          <button id="btnToggleProv" type="button" onclick="toggleDashProvisao()" style="display:none;margin-top:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 11px;font-size:0.66rem;font-weight:700;letter-spacing:.03em;cursor:pointer;">💸 Ver só gasto real</button>
         </div>
 
         <!-- 🏦 BANCO — situação atual (2º nível) -->
@@ -2920,7 +2921,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202605211230"></script>
+<script src="js/render.js?v=202605251400"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202604052000"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

@@ -237,6 +237,13 @@ function safeRender(fn) {
   }, 50);
 }
 
+// Toggle do dashboard: alterna entre resultado COM provisão de orçamento e
+// só com o gasto real/lançado. Lido em _renderAll() via window._dashSemProv.
+window.toggleDashProvisao = function() {
+  window._dashSemProv = !window._dashSemProv;
+  renderAll();
+};
+
 function renderAll() {
   try { _renderAll(); setTimeout(_updateTableWrapHeight, 100); } catch(e) {
     console.error('[FinanceOS] ERRO CRÍTICO no renderAll:', e);
@@ -337,13 +344,14 @@ function _renderAll() {
   const isMesFuturo  = (_anoProv > anoHoje || (_anoProv === anoHoje && _mesProv > mesHoje));
   const isMesPassado = !isMesVigente && !isMesFuturo;
 
-  let totalDCard = gastoRealTotal; // base = gasto real (sem terceiros)
+  // Toggle do dashboard: ver resultado sem a provisão de orçamento (só gasto real)
+  const _semProv = !!window._dashSemProv;
+  // Provisão extra do mês (orçamento ainda não gasto) — independe do toggle.
+  // Saldo da orçamento = orçamento total do mês - gasto calculado pela lógica de orçamento (parcela 1 etc)
+  const _provExtra = (!isMesPassado && _totProvMes > 0) ? Math.max(0, _totProvMes - _totGastoMes) : 0;
 
-  if (!isMesPassado && _totProvMes > 0) {
-    // Saldo da orçamento = orçamento total do mês - gasto calculado pela lógica de orçamento (parcela 1 etc)
-    const saldoProvTotal = _totProvMes - _totGastoMes;
-    if (saldoProvTotal > 0) totalDCard += saldoProvTotal;
-  }
+  let totalDCard = gastoRealTotal; // base = gasto real (sem terceiros)
+  if (!_semProv) totalDCard += _provExtra; // soma a provisão, salvo se o toggle "sem provisão" estiver ativo
 
   const saldo = totalR - totalDCard;
 
@@ -401,7 +409,7 @@ function _renderAll() {
   if (_elDespPend) _elDespPend.textContent = fmt(totalPendLiq);
 
   // Breakdown despesa real vs orçamento
-  const saldoProvParaCard = (!isMesPassado && _totProvMes > 0) ? Math.max(0, _totProvMes - _totGastoMes) : 0;
+  const saldoProvParaCard = _semProv ? 0 : _provExtra;
   const provRow  = document.getElementById('despesaProvRow');
   const provReal = document.getElementById('despesaProvReal');
   const provProv = document.getElementById('despesaProvProv');
@@ -432,6 +440,21 @@ function _renderAll() {
     // Badge de alerta
     const _resIcon = document.getElementById('resultadoAlertaIcon');
     if (_resIcon) _resIcon.style.display = !_resPos ? 'inline' : 'none';
+  }
+  // Botão "ver sem provisão" — só aparece quando há provisão a alternar neste mês
+  const _btnProv = document.getElementById('btnToggleProv');
+  if (_btnProv) {
+    if (_provExtra > 0) {
+      _btnProv.style.display = 'inline-block';
+      _btnProv.textContent = _semProv
+        ? '📦 Incluir provisão (+' + fmt(_provExtra) + ')'
+        : '💸 Ver só gasto real';
+      _btnProv.title = _semProv
+        ? 'Mostrando só o gasto real/lançado. Clique para somar a provisão de orçamento (' + fmt(_provExtra) + ').'
+        : 'Despesa inclui ' + fmt(_provExtra) + ' de provisão de orçamento. Clique para ver só o gasto real/lançado.';
+    } else {
+      _btnProv.style.display = 'none';
+    }
   }
   // Linha de transferências do período no card de saldo (informativo)
   const _transfRow = document.getElementById('transfMesRow');
