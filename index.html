@@ -870,19 +870,19 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
   <div class="tab-content" id="tab-lancamentos">
 
     <div class="panel">
+      <!-- Totais filtrados — acima do cabeçalho -->
+      <div id="lancTotalsBar" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:0.78rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;margin-bottom:10px;">
+        <span style="color:var(--muted);font-size:0.7rem;font-weight:600;letter-spacing:.04em" id="lancTotQtd">—</span>
+        <span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 4px"></span>
+        <span style="color:var(--muted);font-size:0.68rem">↓ Desp</span><strong id="lancTotDesp" style="color:var(--red);font-size:0.84rem;font-family:'Space Mono',monospace">R$ 0,00</strong>
+        <span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 4px"></span>
+        <span style="color:var(--muted);font-size:0.68rem">↑ Rec</span><strong id="lancTotRec" style="color:var(--green);font-size:0.84rem;font-family:'Space Mono',monospace">R$ 0,00</strong>
+        <span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 4px"></span>
+        <span style="color:var(--muted);font-size:0.68rem">Saldo</span><strong id="lancTotSaldo" style="font-size:0.84rem;font-family:'Space Mono',monospace">R$ 0,00</strong>
+      </div>
       <div class="panel-header" style="flex-wrap:wrap;gap:8px;">
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex:1;min-width:0;">
           <span class="panel-title" style="white-space:nowrap">Todos os Lançamentos</span>
-          <!-- Totais filtrados -->
-          <div id="lancTotalsBar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:0.78rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;">
-            <span style="color:var(--muted);font-size:0.7rem;font-weight:600;letter-spacing:.04em" id="lancTotQtd">—</span>
-            <span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 4px"></span>
-            <span style="color:var(--muted);font-size:0.68rem">↓ Desp</span><strong id="lancTotDesp" style="color:var(--red);font-size:0.84rem;font-family:'Space Mono',monospace">R$ 0,00</strong>
-            <span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 4px"></span>
-            <span style="color:var(--muted);font-size:0.68rem">↑ Rec</span><strong id="lancTotRec" style="color:var(--green);font-size:0.84rem;font-family:'Space Mono',monospace">R$ 0,00</strong>
-            <span style="width:1px;height:14px;background:var(--border);display:inline-block;margin:0 4px"></span>
-            <span style="color:var(--muted);font-size:0.68rem">Saldo</span><strong id="lancTotSaldo" style="font-size:0.84rem;font-family:'Space Mono',monospace">R$ 0,00</strong>
-          </div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">
           <button class="btn desktop-only" style="background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,0.35);color:var(--accent)" onclick="downloadTemplateImportacao()" title="Baixar planilha modelo com suas categorias, pagamentos e terceiros">⬇ Planilha Modelo</button>
@@ -1008,7 +1008,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
           <tbody id="allTable"><tr><td colspan="14" class="empty-state">Nenhum lançamento.</td></tr></tbody>
         </table>
       </div>
-      <!-- totais movidos para o cabeçalho -->
+      <!-- totais filtrados movidos para acima do cabeçalho -->
       <div style="display:none">
         <span id="filteredTotal"></span><span id="filteredReceita"></span><span id="filteredDespesa"></span>
       </div>
