@@ -1239,10 +1239,12 @@ function updateBulkBar() {
       bCat.appendChild(o);
     });
     bCat.value = prev;
-    onBulkCatChange();
   }
-  // Searchable single-selects da barra em massa (idempotente: build = refresh)
-  if (window.SSEL) { SSEL.build('bulkStatus'); SSEL.build('bulkCategoria'); SSEL.build('bulkBanco'); }
+  // Searchable single-selects da barra em massa (idempotente: build = refresh).
+  // Constrói TODOS os wrappers ANTES de onBulkCatChange — ele repopula a
+  // sub-categoria e depende do wrapper já existir para re-sincronizar.
+  if (window.SSEL) { SSEL.build('bulkStatus'); SSEL.build('bulkCategoria'); SSEL.build('bulkSubCategoria'); SSEL.build('bulkBanco'); }
+  onBulkCatChange();
   // bulkBanco updated via populateBancoSelects()
   if (ids.length > 0) {
     bar.style.display = 'flex';
