@@ -207,8 +207,8 @@ function renderParceladosTab() {
   const vlTotalMes    = noMesList.reduce((s,g)=>s+g.vlMes,0);
   // Parcelamentos cuja parcela do mês é a última (quitam no mês)
   // "Quitando no mês" = a parcela que vence neste mês é a ÚLTIMA do grupo
-  // (independe de quantas anteriores foram pagas). restamMes = total - numParcelaMes.
-  const gruposQuitandoMes = noMesList.filter(g => g.restamMes <= 0);
+  // (numParcelaMes === total), independente de quantas anteriores foram pagas.
+  const gruposQuitandoMes = noMesList.filter(g => g.numParcelaMes && g.numParcelaMes >= g.total);
   const vlQuitacaoMes  = gruposQuitandoMes.reduce((s,g)=>s+g.vlMes,0);
   const qtdQuitacaoMes = gruposQuitandoMes.length;
 
@@ -316,9 +316,10 @@ function renderParceladosTab() {
         const total = list.reduce((s,x)=>s+x.vlMes,0);
         const rows = list.map(s => {
           const parcNum = s.numParcelaMes ? `${s.numParcelaMes}/${s.total}` : '—';
-          const restamStr = s.restam > 1
-            ? `<span style="color:#f59e0b">${s.restam} restam</span>`
-            : s.restam === 1 ? `<span style="color:#22c55e">última!</span>`
+          const ehUltimaMes = s.numParcelaMes && s.numParcelaMes >= s.total;
+          const restamStr = ehUltimaMes
+            ? `<span style="color:#22c55e">última!</span>`
+            : s.restam > 0 ? `<span style="color:#f59e0b">${s.restam} restam</span>`
             : `<span style="color:#22c55e">quitado</span>`;
           const vencStr = s.vencMes ? `<span style="color:var(--muted);font-size:0.65rem"> · venc. ${s.vencMes}</span>` : '';
           const sid2 = s.idMes || null;
@@ -357,8 +358,9 @@ function renderParceladosTab() {
           return `<div style="font-size:0.65rem;font-weight:700;color:${corTitulo};letter-spacing:.06em;padding:8px 4px 4px">${icone} ${titulo} — ${list.length} parcela${list.length>1?'s':''}</div>` +
             list.map(s => {
               const parcNum = s.numParcelaMes ? `${s.numParcelaMes}/${s.total}` : '—';
-              const restamStr = s.restam > 1 ? `<span style="color:#f59e0b">${s.restam} restam</span>`
-                : s.restam === 1 ? `<span style="color:#22c55e">última!</span>`
+              const ehUltimaMes = s.numParcelaMes && s.numParcelaMes >= s.total;
+              const restamStr = ehUltimaMes ? `<span style="color:#22c55e">última!</span>`
+                : s.restam > 0 ? `<span style="color:#f59e0b">${s.restam} restam</span>`
                 : `<span style="color:#22c55e">quitado</span>`;
               const sid2 = s.idMes || null;
               const bancoObj = loadBancos().find(x=>x.id===s.banco);
