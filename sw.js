@@ -2,7 +2,7 @@
 // Estratégia: network-first com fallback pro cache. Permite uso offline
 // preservando dados em cache, mas sempre tenta buscar versão fresca antes.
 
-const CACHE_NAME = 'mesredondo-v1';
+const CACHE_NAME = 'mesredondo-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -34,8 +34,11 @@ self.addEventListener('fetch', (event) => {
   // Não cacheia chamadas externas (Supabase, CDNs, etc.) — só same-origin
   if (url.origin !== self.location.origin) return;
 
+  // 'no-cache' força revalidação com o servidor (via ETag/304) em vez de
+  // servir cópia do HTTP cache do browser — evita HTML/JS velhos dentro do
+  // max-age=600 do GitHub Pages, que travava deploys novos.
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         // Cacheia versão fresca pra fallback offline
         if (res && res.status === 200 && res.type === 'basic') {
