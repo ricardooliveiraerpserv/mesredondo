@@ -269,6 +269,7 @@ async function populateBancoSelects() {
     bBanco.innerHTML = '<option value="">— Alterar banco —</option>' +
       bancos.map(b => `<option value="${b.id}">${b.icone||'🏦'} ${b.nome}</option>`).join('');
     if (cur) bBanco.value = cur;
+    if (window.SSEL) SSEL.build('bulkBanco');
   }
 }
 

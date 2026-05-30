@@ -1241,6 +1241,8 @@ function updateBulkBar() {
     bCat.value = prev;
     onBulkCatChange();
   }
+  // Searchable single-selects da barra em massa (idempotente: build = refresh)
+  if (window.SSEL) { SSEL.build('bulkStatus'); SSEL.build('bulkCategoria'); SSEL.build('bulkBanco'); }
   // bulkBanco updated via populateBancoSelects()
   if (ids.length > 0) {
     bar.style.display = 'flex';
@@ -1265,16 +1267,25 @@ function onBulkCatChange() {
   const cats = loadCats();
   const cat = cats.find(function(c) { return c.nome === catNome; });
   bSub.innerHTML = '<option value="">— Alterar sub-categoria —</option>';
-  if (cat && cat.subs && cat.subs.length) {
+  const hasSubs = !!(cat && cat.subs && cat.subs.length);
+  if (hasSubs) {
     cat.subs.forEach(function(s) {
       const sNome = typeof s === 'string' ? s : s.nome;
       const o = document.createElement('option');
       o.value = sNome; o.textContent = sNome;
       bSub.appendChild(o);
     });
-    bSub.style.display = '';
+  }
+  // mostra o seletor de sub-cat quando não há categoria escolhida ou ela tem subs;
+  // esconde quando a categoria escolhida não possui sub-categorias.
+  const showSub = hasSubs || !catNome;
+  // Sob o SSEL o <select> nativo fica oculto e quem aparece é o wrapper.
+  const subWrap = document.getElementById('ssel-bulkSubCategoria');
+  if (subWrap) {
+    subWrap.style.display = showSub ? '' : 'none';
+    if (window.SSEL) SSEL.refresh('bulkSubCategoria');
   } else {
-    bSub.style.display = catNome ? 'none' : '';
+    bSub.style.display = showSub ? '' : 'none';
   }
 }
 
