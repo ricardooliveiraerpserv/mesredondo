@@ -206,7 +206,9 @@ function renderParceladosTab() {
   const vlPagoMes     = pagosMes.reduce((s,g)=>s+g.vlMes,0);
   const vlTotalMes    = noMesList.reduce((s,g)=>s+g.vlMes,0);
   // Parcelamentos cuja parcela do mês é a última (quitam no mês)
-  const gruposQuitandoMes = noMesList.filter(g => g.restam <= 1);
+  // "Quitando no mês" = a parcela que vence neste mês é a ÚLTIMA do grupo
+  // (independe de quantas anteriores foram pagas). restamMes = total - numParcelaMes.
+  const gruposQuitandoMes = noMesList.filter(g => g.restamMes <= 0);
   const vlQuitacaoMes  = gruposQuitandoMes.reduce((s,g)=>s+g.vlMes,0);
   const qtdQuitacaoMes = gruposQuitandoMes.length;
 
