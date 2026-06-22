@@ -4603,28 +4603,35 @@ function renderImportPreview(rows) {
   var _byValParcDate = {}, _byValDate = {}, _byValParc = {}, _bySplitFull = {};
   var _grpParcDate = {};
   var _add = function(map, k, l) { (map[k] = map[k] || []).push(l); };
+  // Período (YYYYMM) PELO VENCIMENTO da fatura — o pareamento é escopado por venc:
+  // uma compra de junho só casa com lançamento de venc junho (recorrentes de maio
+  // NÃO contam como duplicata da de junho). Regra: SEMPRE o vencimento.
+  var _ym = function(s) { s = String(s || ''); var a = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (a) return a[3] + a[2]; var b = s.match(/^(\d{4})-(\d{2})/); if (b) return b[1] + b[2]; return ''; };
+  var _vpLanc = function(l) { return _ym(l.vencimento) || ((l.mes && l.ano) ? (String(l.ano) + String(l.mes).padStart(2, '0')) : '') || _ym(l.data); };
+  var _vpRow  = function(r) { return _ym(r.xlsxVenc) || _ym(r.date); };
   _allExist.forEach(function(l) {
+    var vp = _vpLanc(l);
     var dn = _stripParc(l.desc);
     var v  = Math.round(Math.abs(_valorExib(l)||0)*100);
     var t  = l.tipo || 'despesa';
     var dt = _normD(l.data);
-    var base = t+'|'+dn+'|'+v;
+    var base = vp+'|'+t+'|'+dn+'|'+v;
     if (dt) _add(_byData, base+'|'+dt, l);
     if (l.parcAtual) _add(_byParc, base+'|'+l.parcAtual, l);
     _add(_byVal, base, l);
     if (l.tipoLanc === 'fixo' || l.recorr === 'fixo') _add(_byFixed, base, l);
-    if (dt) _add(_byValDate, t+'|'+v+'|'+dt, l);
+    if (dt) _add(_byValDate, vp+'|'+t+'|'+v+'|'+dt, l);
     var pt = l.parcTotal || l.totalParcelas;
     if (pt && pt > 1) {
-      if (dt) _add(_byValParcDate, t+'|'+v+'|'+pt+'|'+dt, l);
-      _add(_byValParc, t+'|'+v+'|'+pt, l);
+      if (dt) _add(_byValParcDate, vp+'|'+t+'|'+v+'|'+pt+'|'+dt, l);
+      _add(_byValParc, vp+'|'+t+'|'+v+'|'+pt, l);
     }
     if (l._splitFull) {
       var fc = Math.round(Math.abs(l._splitFull)*100);
-      if (dt) _add(_bySplitFull, t+'|'+fc+'|'+dt, l);
-      if (pt && pt > 1) { if (dt) _add(_bySplitFull, t+'|'+fc+'|'+pt+'|'+dt, l); _add(_bySplitFull, t+'|'+fc+'|'+pt, l); }
+      if (dt) _add(_bySplitFull, vp+'|'+t+'|'+fc+'|'+dt, l);
+      if (pt && pt > 1) { if (dt) _add(_bySplitFull, vp+'|'+t+'|'+fc+'|'+pt+'|'+dt, l); _add(_bySplitFull, vp+'|'+t+'|'+fc+'|'+pt, l); }
     }
-    if (pt && pt > 1 && dt) { var gk = t+'|'+pt+'|'+dt; (_grpParcDate[gk] = _grpParcDate[gk] || []).push({ l: l, c: v }); }
+    if (pt && pt > 1 && dt) { var gk = vp+'|'+t+'|'+pt+'|'+dt; (_grpParcDate[gk] = _grpParcDate[gk] || []).push({ l: l, c: v }); }
   });
 
   var _consumed = (typeof Set !== 'undefined') ? new Set() : null;
@@ -4635,10 +4642,10 @@ function renderImportPreview(rows) {
     for (var i = 0; i < arr.length; i++) if (!_isUsed(arr[i])) { _use(arr[i]); return arr[i]; }
     return null;
   };
-  // Split por soma: subconjunto das partes (mesma data+parcelas) que soma o valor cheio
-  var _splitSumMatch = function(t, vCents, pt, dt) {
+  // Split por soma: subconjunto das partes (mesmo venc+data+parcelas) que soma o valor cheio
+  var _splitSumMatch = function(vp, t, vCents, pt, dt) {
     if (!(pt > 1) || !dt) return null;
-    var grp = _grpParcDate[t+'|'+pt+'|'+dt];
+    var grp = _grpParcDate[vp+'|'+t+'|'+pt+'|'+dt];
     if (!grp) return null;
     var arr = grp.filter(function(x){ return !_isUsed(x.l); });
     if (arr.length < 2) return null;
@@ -4652,12 +4659,13 @@ function renderImportPreview(rows) {
   };
 
   var _keys = function(r) {
+    var vp = _vpRow(r);
     var dn = _stripParc(r.desc || r.descRaw);
     var v  = Math.round((r.value||0)*100);
     var t  = r.xlsxTipo || 'despesa';
     var dt = _normD(r.date);
     var isParc = !!(r.parcAtual || (r.parcTotal && r.parcTotal > 1));
-    return { dn: dn, v: v, t: t, dt: dt, isParc: isParc, pt: r.parcTotal || 0, parcAtual: r.parcAtual, base: t+'|'+dn+'|'+v };
+    return { vp: vp, dn: dn, v: v, t: t, dt: dt, isParc: isParc, pt: r.parcTotal || 0, parcAtual: r.parcAtual, base: vp+'|'+t+'|'+dn+'|'+v };
   };
   // Candidatos por camada (mais forte → mais frouxo). null = camada não se aplica.
   var _tierArr = function(r, tier) {
@@ -4669,12 +4677,12 @@ function renderImportPreview(rows) {
         if (k.isParc) return _byVal[k.base];
         if (_byVal[k.base]) { var dl = k.dn.toLowerCase(); if (dl.length > 4 && !/^(saque|transferencia|pix|deposito|ted|doc|pagamento|debito|credito|estorno)$/.test(dl)) return _byVal[k.base]; }
         return null;
-      case 4: return (k.isParc && k.pt > 1 && k.dt) ? _byValParcDate[k.t+'|'+k.v+'|'+k.pt+'|'+k.dt] : null;
-      case 5: return (k.isParc && k.dt) ? _byValDate[k.t+'|'+k.v+'|'+k.dt] : null;
-      case 6: return (k.isParc && k.pt > 1) ? _byValParc[k.t+'|'+k.v+'|'+k.pt] : null;
+      case 4: return (k.isParc && k.pt > 1 && k.dt) ? _byValParcDate[k.vp+'|'+k.t+'|'+k.v+'|'+k.pt+'|'+k.dt] : null;
+      case 5: return (k.isParc && k.dt) ? _byValDate[k.vp+'|'+k.t+'|'+k.v+'|'+k.dt] : null;
+      case 6: return (k.isParc && k.pt > 1) ? _byValParc[k.vp+'|'+k.t+'|'+k.v+'|'+k.pt] : null;
       case 7:
         if (!k.isParc) return null;
-        return (k.pt > 1 && k.dt && _bySplitFull[k.t+'|'+k.v+'|'+k.pt+'|'+k.dt]) || (k.dt && _bySplitFull[k.t+'|'+k.v+'|'+k.dt]) || null;
+        return (k.pt > 1 && k.dt && _bySplitFull[k.vp+'|'+k.t+'|'+k.v+'|'+k.pt+'|'+k.dt]) || (k.dt && _bySplitFull[k.vp+'|'+k.t+'|'+k.v+'|'+k.dt]) || null;
     }
     return null;
   };
@@ -4687,7 +4695,7 @@ function renderImportPreview(rows) {
     rows.forEach(function(r) { if (r._existingMatch) return; var m = _take(_tierArr(r, _tier)); if (m) { r._existingMatch = m; r._matchIds = _ids([m]); } });
   }
   // Camada final: split por soma das partes (consome e registra TODAS as partes)
-  rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var picks = _splitSumMatch(k.t, k.v, k.pt, k.dt); if (picks) { r._existingMatch = picks[0]; r._matchIds = _ids(picks); } });
+  rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var picks = _splitSumMatch(k.vp, k.t, k.v, k.pt, k.dt); if (picks) { r._existingMatch = picks[0]; r._matchIds = _ids(picks); } });
   rows.forEach(function(r) { if (!r._existingMatch) { r._existingMatch = null; r._matchIds = []; } });
 
   var _dups    = rows.filter(function(r) { return r._existingMatch; });
