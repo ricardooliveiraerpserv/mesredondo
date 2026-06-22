@@ -3784,10 +3784,11 @@ function processXLSXData(sstXml, wsXml) {
 
     var rawAmt = parseFloat(amtVal);
     if (itauRaw) {
-      // Na fatura Itaú a COMPRA vem positiva (despesa). O pagamento da fatura anterior
-      // e estornos/créditos vêm negativos → ignorados na importação (contabilizados p/ diagnóstico).
+      // Na fatura Itaú a COMPRA vem positiva (despesa). Estornos/créditos vêm negativos
+      // e ENTRAM como crédito (despesa negativa) → deduzem do total do card.
+      // Só o "Pagamento Efetuado" (quitação da fatura anterior) fica de fora.
       if (/pagamento efetuado/i.test(descVal)) return;
-      if (rawAmt < 0) { itauEstornoSum += -rawAmt; itauEstornoN++; return; }
+      if (rawAmt < 0) { itauEstornoSum += -rawAmt; itauEstornoN++; }
       if (!pgtoVal) pgtoVal = 'Black Itau';
     }
     // Infer tipo from sign if not explicitly set in column
@@ -3818,7 +3819,8 @@ function processXLSXData(sstXml, wsXml) {
   if (typeof window !== 'undefined') {
     window._itauDiag = itauRaw ? {
       declarado: itauFaturaTotal,
-      comprasSum: rows.reduce(function(s, r) { return s + (r.value || 0); }, 0),
+      // Líquido (compras − estornos): estornos entram como crédito (despesa negativa)
+      comprasSum: rows.reduce(function(s, r) { return s + (r.originalSign < 0 ? -(r.value || 0) : (r.value || 0)); }, 0),
       comprasN: rows.length,
       estornoSum: itauEstornoSum,
       estornoN: itauEstornoN
@@ -5127,8 +5129,9 @@ function _renderItauDiag(selSum, selCount) {
   if (!d) { el.style.display = 'none'; return; }
   var f = fmtBR;
   var rows = importParsedRows || [];
+  var _sv = function(r) { return r.originalSign < 0 ? -(r.value || 0) : (r.value || 0); };
   var novos = rows.filter(function(r) { return !r._existingMatch; });
-  var novosTot = novos.reduce(function(s, r) { return s + (r.value || 0); }, 0);
+  var novosTot = novos.reduce(function(s, r) { return s + _sv(r); }, 0);
   var jaN = rows.length - novos.length;
   var plat = _platTotalItau();
   var mmaa = plat.m ? String(plat.m).padStart(2, '0') + '/' + plat.a : '';
@@ -5143,7 +5146,7 @@ function _renderItauDiag(selSum, selCount) {
   L.push('<span>Compras na fatura: <strong>' + f(d.comprasSum) + '</strong> (' + d.comprasN + ')</span>');
   L.push('<span>No cartão na plataforma' + (mmaa ? ' (' + mmaa + ')' : '') + ': <strong style="color:var(--green)">' + f(plat.tot) + '</strong> (' + plat.n + ')</span>');
   L.push('<span>Novos a importar: <strong style="color:' + (novos.length ? 'var(--accent)' : 'var(--green)') + '">' + f(novosTot) + '</strong> (' + novos.length + ')</span>');
-  if (d.estornoN > 0) L.push('<span>Estornos não importados: <strong>-' + f(d.estornoSum) + '</strong> (' + d.estornoN + ')</span>');
+  if (d.estornoN > 0) L.push('<span>Estornos (crédito, deduzem): <strong style="color:var(--green)">-' + f(d.estornoSum) + '</strong> (' + d.estornoN + ')</span>');
   L.push('</div>');
   if (!novos.length) {
     L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ Nada novo: as ' + d.comprasN + ' compras desta fatura já estão lançadas (' + jaN + ' duplicados).</div>');
@@ -5384,8 +5387,9 @@ function conferirFaturaPlataforma() {
   var fixaveis = foraDoCard.filter(function(x) { return x.l.id != null && (x.l.tipo === 'despesa' || x.l.tipo == null); });
   window._reconcileFixPgtoIds = fixaveis.map(function(x) { return String(x.l.id); });
 
-  var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
-  var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
+  var _sv = function(r) { return r.originalSign < 0 ? -(r.value || 0) : (r.value || 0); }; // valor com sinal (estorno negativo)
+  var faturaTot = importParsedRows.reduce(function(s, r) { return s + _sv(r); }, 0);
+  var faltandoTot = faltando.reduce(function(s, r) { return s + _sv(r); }, 0);
   var emOutroTot = emOutro.reduce(function(s, x) { return s + x.r.value; }, 0);
   var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0); // total REAL na plataforma (= card)
   var platAbs = Math.abs(platTot);
@@ -5412,7 +5416,7 @@ function conferirFaturaPlataforma() {
   if (emOutro.length) conta.push('• R$ ' + f(emOutroTot) + ' das compras estão lançadas com vencimento em OUTRO mês (lista abaixo).');
   if (foraDoCard.length) conta.push('• R$ ' + f(foraDoCardTot) + ' = compras lançadas, mas FORA do card (pagamento diferente de Black Itaú, ou Entrada Terceiro) — lista abaixo, com botão pra corrigir.');
   H.push('<div style="color:var(--text2);font-size:0.78rem;margin-bottom:8px;padding:8px 12px;background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.25);border-radius:8px">' + conta.join('<br>') + '</div>');
-  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura declarada é ' + (d.declarado != null ? f(d.declarado) : '—') + ' = compras ' + f(faturaTot) + ' − ' + f(d.estornoSum) + ' de estornos/créditos (que não são lançados como despesa).</div>');
+  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Inclui ' + d.estornoN + ' estorno(s)/crédito(s) lançados como negativo (−' + f(d.estornoSum) + '), que deduzem do total. Por isso a fatura líquida (' + f(faturaTot) + ') bate com o valor declarado/a pagar.</div>');
 
   function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
     var s = '<div style="margin-bottom:14px">';
