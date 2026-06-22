@@ -5081,45 +5081,29 @@ function conferirFaturaPlataforma() {
     return vm === alvoMes && va === alvoAno;
   });
 
-  // Matching robusto: descrições podem vir ilegíveis ("????L") ou com codificação
-  // diferente entre fatura e plataforma. Normaliza forte (só letras/números) e,
-  // se a descrição não casar, faz 2ª passada por DATA + VALOR.
-  var norm = function(s) { return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ''); };
-  var normDate = function(s) {
-    s = String(s || '').trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
-  };
-  var money = function(v) { return Math.abs(parseFloat(v) || 0).toFixed(2); };
-
-  var platItems = plat.map(function(l) {
-    return { l: l, desc: norm(l.desc), date: normDate(l.data || l.vencimento), val: money(l.valor), used: false };
-  });
-  var faltando = []; // na fatura, sem correspondência na plataforma
-  importParsedRows.forEach(function(r) {
-    var rd = norm(r.desc), rdate = normDate(r.date), rval = money(r.value);
-    // 1ª passada: descrição (normalizada) + valor; 2ª passada: data + valor
-    var m = null, i;
-    for (i = 0; i < platItems.length; i++) { var p = platItems[i]; if (!p.used && p.val === rval && rd && p.desc === rd) { m = p; break; } }
-    if (!m) for (i = 0; i < platItems.length; i++) { var p2 = platItems[i]; if (!p2.used && p2.val === rval && rdate && p2.date === rdate) { m = p2; break; } }
-    if (m) m.used = true; else faltando.push(r);
-  });
-  var soPlat = platItems.filter(function(p) { return !p.used; }).map(function(p) { return p.l; }); // na plataforma, sem corresponder na fatura
+  // Consistência TOTAL com a aba "Novos/Duplicados": usa o MESMO resultado do dedup
+  // da pré-visualização (r._existingMatch), que compara contra a base inteira e é
+  // ciente de parcela. Evita divergência entre as duas telas.
+  var temDedup = importParsedRows.some(function(r) { return r.hasOwnProperty('_existingMatch'); });
+  var faltando = importParsedRows.filter(function(r) { return !r._existingMatch; }); // = "Novos"
+  var matchedIds = {};
+  importParsedRows.forEach(function(r) { if (r._existingMatch && r._existingMatch.id != null) matchedIds[String(r._existingMatch.id)] = true; });
+  var soPlat = plat.filter(function(l) { return !matchedIds[String(l.id)]; }); // Black Itaú deste venc sem par na fatura
 
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
-  var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
+  var jaLancadoTot = faturaTot - faltandoTot;
+  var jaLancadoN = importParsedRows.length - faltando.length;
   var soPlatTot = soPlat.reduce(function(s, l) { return s + Math.abs(parseFloat(l.valor) || 0); }, 0);
   var d = window._itauDiag || {};
 
   var H = [];
   H.push('<div style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">');
   H.push('<span>Fatura (compras): <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
-  H.push('<span>Plataforma Black Itaú' + (alvoLabel ? ' venc ' + alvoLabel : '') + ': <strong>' + f(platTot) + '</strong> (' + plat.length + ')</span>');
-  var difer = faturaTot - platTot;
-  H.push('<span>Diferença: <strong style="color:' + (Math.abs(difer) < 0.005 ? 'var(--green)' : '#ef4444') + '">' + (difer >= 0 ? '+' : '-') + f(Math.abs(difer)) + '</strong></span>');
+  H.push('<span>Já na plataforma: <strong style="color:var(--green)">' + f(jaLancadoTot) + '</strong> (' + jaLancadoN + ')</span>');
+  H.push('<span>Faltando: <strong style="color:' + (faltando.length ? '#ef4444' : 'var(--green)') + '">' + f(faltandoTot) + '</strong> (' + faltando.length + ')</span>');
   H.push('</div>');
+  H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:8px">“Faltando” usa a mesma detecção da aba <strong>✚ Novos</strong> (compara com a base inteira, ciente de parcela). “Sem corresponder” lista o que está na plataforma como Black Itaú venc ' + (alvoLabel || '—') + ' e não tem par na fatura.</div>');
   if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa (por isso compras = ' + f(faturaTot) + ' e fatura declarada = ' + (d.declarado != null ? f(d.declarado) : '—') + ').</div>');
 
   function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
@@ -5141,7 +5125,8 @@ function conferirFaturaPlataforma() {
     H.push(tabela('🔴 Na fatura, FALTANDO na plataforma', '#ef4444', faltando, function(r){return r.date;}, function(r){return r.desc;}, function(r){return r.value;}, faltandoTot));
     H.push(tabela('🟡 Na plataforma, SEM corresponder na fatura', 'var(--accent)', soPlat, function(l){return l.data || l.vencimento;}, function(l){return l.desc;}, function(l){return l.valor;}, soPlatTot));
   }
-  if (!alvoMes) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-top:8px">⚠️ Sem mês de vencimento definido — comparei com TODOS os lançamentos Black Itaú. Defina o "Vencimento em massa" para filtrar por 06/2026.</div>');
+  if (!temDedup) H.push('<div style="color:#ef4444;font-size:0.74rem;margin-top:8px">⚠️ Detecção de duplicados ainda não rodou — feche e reabra o preview da fatura antes de conferir.</div>');
+  if (!alvoMes) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-top:8px">⚠️ Sem mês de vencimento definido — a lista "sem corresponder" considera TODOS os lançamentos Black Itaú. Defina o "Vencimento em massa" para filtrar por 06/2026.</div>');
   if (!all.length) H.push('<div style="color:#ef4444;font-size:0.74rem;margin-top:8px">⚠️ Não encontrei lançamentos carregados em memória. Abra a tela de Lançamentos do mês antes de conferir.</div>');
 
   document.getElementById('reconcileBody').innerHTML = H.join('');
