@@ -4570,123 +4570,103 @@ function renderImportPreview(rows) {
     return '';
   };
 
-  // Índices do banco
-  var _byData  = {};  // tipo|desc|val|YYYY-MM-DD  → para variáveis
-  var _byParc  = {};  // tipo|desc|val|parcAtual   → para parcelados com nº exato
-  var _byVal   = {};  // tipo|desc|val              → fallback parcelados (qualquer parcela)
-
-  // Índice de fixos: desc+valor → lancamento (recorrente = mesma desc/valor qualquer mês)
-  var _byFixed = {};
-  // Índices SEM depender da descrição (que vem truncada/ilegível em parcelados):
-  var _byValParcDate = {}; // valor + total de parcelas + data da compra
-  var _byValDate = {};     // valor + data da compra (qualquer desc/parcela)
-  var _byValParc = {};     // valor + total de parcelas (sem data)
-  var _bySplitFull = {};   // valor CHEIO de um lançamento desmembrado (marcador _splitFull)
-  var _grpParcDate = {};   // grupo p/ detectar split por SOMA das partes (mesma data+parcelas)
+  // ── Índices do banco (ARRAYS, p/ pareamento 1:1 que CONSOME cada entrada) ──
+  // Cada lançamento da plataforma só pode casar com UMA linha da fatura. Sem isso,
+  // os matchers frouxos casavam várias linhas no mesmo lançamento → contagem/total
+  // não fechavam (parecia "tudo duplicado" mesmo faltando importar).
+  var _byData = {}, _byParc = {}, _byVal = {}, _byFixed = {};
+  var _byValParcDate = {}, _byValDate = {}, _byValParc = {}, _bySplitFull = {};
+  var _grpParcDate = {};
+  var _add = function(map, k, l) { (map[k] = map[k] || []).push(l); };
   _allExist.forEach(function(l) {
     var dn = _stripParc(l.desc);
     var v  = Math.round(Math.abs(_valorExib(l)||0)*100);
     var t  = l.tipo || 'despesa';
     var dt = _normD(l.data);
     var base = t+'|'+dn+'|'+v;
-    if (dt) _byData[base+'|'+dt] = l;
-    if (l.parcAtual) _byParc[base+'|'+l.parcAtual] = l;
-    if (!_byVal[base]) _byVal[base] = l;
-    // Fixos e recorrentes: indexar só por desc+valor (sem data)
-    if ((l.tipoLanc === 'fixo' || l.recorr === 'fixo') && !_byFixed[base]) {
-      _byFixed[base] = l;
-    }
-    if (dt && !_byValDate[t+'|'+v+'|'+dt]) _byValDate[t+'|'+v+'|'+dt] = l;
+    if (dt) _add(_byData, base+'|'+dt, l);
+    if (l.parcAtual) _add(_byParc, base+'|'+l.parcAtual, l);
+    _add(_byVal, base, l);
+    if (l.tipoLanc === 'fixo' || l.recorr === 'fixo') _add(_byFixed, base, l);
+    if (dt) _add(_byValDate, t+'|'+v+'|'+dt, l);
     var pt = l.parcTotal || l.totalParcelas;
     if (pt && pt > 1) {
-      if (dt && !_byValParcDate[t+'|'+v+'|'+pt+'|'+dt]) _byValParcDate[t+'|'+v+'|'+pt+'|'+dt] = l;
-      if (!_byValParc[t+'|'+v+'|'+pt]) _byValParc[t+'|'+v+'|'+pt] = l;
+      if (dt) _add(_byValParcDate, t+'|'+v+'|'+pt+'|'+dt, l);
+      _add(_byValParc, t+'|'+v+'|'+pt, l);
     }
-    // Marcador de desmembramento: o lançamento sabe seu valor cheio original
     if (l._splitFull) {
       var fc = Math.round(Math.abs(l._splitFull)*100);
-      if (dt) _bySplitFull[t+'|'+fc+'|'+dt] = l;
-      if (pt && pt > 1) { _bySplitFull[t+'|'+fc+'|'+pt+'|'+dt] = l; _bySplitFull[t+'|'+fc+'|'+pt] = l; }
+      if (dt) _add(_bySplitFull, t+'|'+fc+'|'+dt, l);
+      if (pt && pt > 1) { if (dt) _add(_bySplitFull, t+'|'+fc+'|'+pt+'|'+dt, l); _add(_bySplitFull, t+'|'+fc+'|'+pt, l); }
     }
-    // Grupo p/ split por soma (lançamentos parcelados de mesma data+totalParcelas)
-    if (pt && pt > 1 && dt) {
-      var gk = t+'|'+pt+'|'+dt;
-      (_grpParcDate[gk] = _grpParcDate[gk] || []).push({ l: l, c: v });
-    }
+    if (pt && pt > 1 && dt) { var gk = t+'|'+pt+'|'+dt; (_grpParcDate[gk] = _grpParcDate[gk] || []).push({ l: l, c: v }); }
   });
 
-  // Detecta se um subconjunto das partes (mesma data+parcelas) soma o valor cheio
+  var _consumed = (typeof Set !== 'undefined') ? new Set() : null;
+  var _isUsed = function(l) { return _consumed ? _consumed.has(l) : !!l.__dupUsed; };
+  var _use    = function(l) { if (_consumed) _consumed.add(l); else l.__dupUsed = true; };
+  var _take = function(arr) {
+    if (!arr) return null;
+    for (var i = 0; i < arr.length; i++) if (!_isUsed(arr[i])) { _use(arr[i]); return arr[i]; }
+    return null;
+  };
+  // Split por soma: subconjunto das partes (mesma data+parcelas) que soma o valor cheio
   var _splitSumMatch = function(t, vCents, pt, dt) {
     if (!(pt > 1) || !dt) return null;
     var grp = _grpParcDate[t+'|'+pt+'|'+dt];
-    if (!grp || grp.length < 2) return null;
-    var arr = grp.map(function(x){ return x.c; });
-    var n = Math.min(arr.length, 14); // limita o nº de combinações
+    if (!grp) return null;
+    var arr = grp.filter(function(x){ return !_isUsed(x.l); });
+    if (arr.length < 2) return null;
+    var n = Math.min(arr.length, 14);
     for (var mask = 1; mask < (1 << n); mask++) {
-      var s = 0, bits = 0;
-      for (var j = 0; j < n; j++) if (mask & (1 << j)) { s += arr[j]; bits++; }
-      if (bits >= 2 && s === vCents) return grp[0].l; // soma das partes = valor cheio
+      var s = 0, bits = 0, picks = [];
+      for (var j = 0; j < n; j++) if (mask & (1 << j)) { s += arr[j].c; bits++; picks.push(arr[j].l); }
+      if (bits >= 2 && s === vCents) { picks.forEach(_use); return picks[0]; }
     }
     return null;
   };
 
-  var _checkDup = function(r) {
-    var dn  = _stripParc(r.desc || r.descRaw);
-    var v   = Math.round((r.value||0)*100);
-    var t   = r.xlsxTipo || 'despesa';
-    var dt  = _normD(r.date);
+  var _keys = function(r) {
+    var dn = _stripParc(r.desc || r.descRaw);
+    var v  = Math.round((r.value||0)*100);
+    var t  = r.xlsxTipo || 'despesa';
+    var dt = _normD(r.date);
     var isParc = !!(r.parcAtual || (r.parcTotal && r.parcTotal > 1));
-    var isFixo = (r.xlsxTipoLanc === 'fixo');
-    var base = t+'|'+dn+'|'+v;
-
-    // Fixo recorrente: mesma desc + valor já existe como fixo → sempre duplicata
-    if (_byFixed[base]) return _byFixed[base];
-
-    if (!isParc) {
-      // Duplicata exata por data+desc+valor
-      if (dt && _byData[base+'|'+dt]) return _byData[base+'|'+dt];
-      // Mesmo desc+valor com data diferente → só duplicata se parecer serviço recorrente
-      // (evita falso positivo em saques/pagamentos genéricos com mesmo valor)
-      if (_byVal[base]) {
-        var _descLower = dn.toLowerCase();
-        var _pareceRecorrente = _descLower.length > 4 && !/^(saque|transferencia|pix|deposito|ted|doc|pagamento|debito|credito|estorno)$/.test(_descLower);
-        if (_pareceRecorrente) return _byVal[base];
-      }
-      return null;
+    return { dn: dn, v: v, t: t, dt: dt, isParc: isParc, pt: r.parcTotal || 0, parcAtual: r.parcAtual, base: t+'|'+dn+'|'+v };
+  };
+  // Candidatos por camada (mais forte → mais frouxo). null = camada não se aplica.
+  var _tierArr = function(r, tier) {
+    var k = _keys(r);
+    switch (tier) {
+      case 1: return k.isParc ? (k.parcAtual ? _byParc[k.base+'|'+k.parcAtual] : null) : (k.dt ? _byData[k.base+'|'+k.dt] : null);
+      case 2: return (k.isParc && k.dt) ? _byData[k.base+'|'+k.dt] : null;
+      case 3:
+        if (k.isParc) return _byVal[k.base];
+        if (_byVal[k.base]) { var dl = k.dn.toLowerCase(); if (dl.length > 4 && !/^(saque|transferencia|pix|deposito|ted|doc|pagamento|debito|credito|estorno)$/.test(dl)) return _byVal[k.base]; }
+        return null;
+      case 4: return (k.isParc && k.pt > 1 && k.dt) ? _byValParcDate[k.t+'|'+k.v+'|'+k.pt+'|'+k.dt] : null;
+      case 5: return (k.isParc && k.dt) ? _byValDate[k.t+'|'+k.v+'|'+k.dt] : null;
+      case 6: return (k.isParc && k.pt > 1) ? _byValParc[k.t+'|'+k.v+'|'+k.pt] : null;
+      case 7:
+        if (!k.isParc) return null;
+        return (k.pt > 1 && k.dt && _bySplitFull[k.t+'|'+k.v+'|'+k.pt+'|'+k.dt]) || (k.dt && _bySplitFull[k.t+'|'+k.v+'|'+k.dt]) || null;
     }
-
-    // Parcelado 1: parcela exata
-    if (r.parcAtual && _byParc[base+'|'+r.parcAtual]) return _byParc[base+'|'+r.parcAtual];
-    // Parcelado 2: data de compra exata (mesma compra, qualquer parcela)
-    if (dt && _byData[base+'|'+dt]) return _byData[base+'|'+dt];
-    // Parcelado 3: desc+valor — se QUALQUER parcela dessa compra existe no banco
-    if (_byVal[base]) return _byVal[base];
-    // Parcelado 4+: SEM descrição (truncada/ilegível "????L"). Tenta, do mais forte
-    // ao mais frouxo: valor+parcelas+data → valor+data → valor+parcelas.
-    var _pt = r.parcTotal || 0;
-    if (_pt > 1 && dt && _byValParcDate[t+'|'+v+'|'+_pt+'|'+dt]) return _byValParcDate[t+'|'+v+'|'+_pt+'|'+dt];
-    if (dt && _byValDate[t+'|'+v+'|'+dt]) return _byValDate[t+'|'+v+'|'+dt];
-    if (_pt > 1 && _byValParc[t+'|'+v+'|'+_pt]) return _byValParc[t+'|'+v+'|'+_pt];
-    // Desmembrado: a compra foi dividida. Casa pelo marcador _splitFull (valor cheio)
-    // ou detectando que as partes na plataforma SOMAM o valor cheio da fatura.
-    if (_pt > 1 && dt && _bySplitFull[t+'|'+v+'|'+_pt+'|'+dt]) return _bySplitFull[t+'|'+v+'|'+_pt+'|'+dt];
-    if (dt && _bySplitFull[t+'|'+v+'|'+dt]) return _bySplitFull[t+'|'+v+'|'+dt];
-    var _sm = _splitSumMatch(t, v, _pt, dt);
-    if (_sm) return _sm;
-
     return null;
   };
 
-  var _dups    = rows.filter(function(r) { return _checkDup(r) !== null; });
-  var _nonDups = rows.filter(function(r) { return _checkDup(r) === null; });
-  // Marca cada row com _existingMatch (null = novo, objeto = duplicata)
-  _dups.forEach(function(r) { r._existingMatch = _checkDup(r); });
-  _nonDups.forEach(function(r) { r._existingMatch = null; });
+  // Passe fixo (NÃO consome — fixo recorrente casa todo mês)
+  rows.forEach(function(r) { var k = _keys(r); var fx = _byFixed[k.base]; r._existingMatch = (fx && fx.length) ? fx[0] : undefined; });
+  // Passes 1..7 consumindo, exato → frouxo (tier across all rows antes do próximo)
+  for (var _tier = 1; _tier <= 7; _tier++) {
+    rows.forEach(function(r) { if (r._existingMatch) return; var m = _take(_tierArr(r, _tier)); if (m) r._existingMatch = m; });
+  }
+  // Camada final: split por soma das partes
+  rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var m = _splitSumMatch(k.t, k.v, k.pt, k.dt); if (m) r._existingMatch = m; });
+  rows.forEach(function(r) { if (!r._existingMatch) r._existingMatch = null; });
+
+  var _dups    = rows.filter(function(r) { return r._existingMatch; });
+  var _nonDups = rows.filter(function(r) { return !r._existingMatch; });
   rows = _dups.concat(_nonDups);
-  // Atualiza importParsedRows com as marcações (para filtros funcionarem)
-  importParsedRows.forEach(function(r) {
-    var m = _checkDup(r); r._existingMatch = m || null;
-  });
   // Popula selects de filtro após ter os dados parseados
   _populateImportFilterSelects();
 
@@ -4730,7 +4710,7 @@ function renderImportPreview(rows) {
     var subIcon = (r.subCategoria && r._iaCateg) ? ' ✨' : r.xlsxSub ? ' 📋' : (sugSub ? ' 💡' : '');
     var selStyle = 'background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 5px;border-radius:4px;font-size:0.73rem;width:100%';
 
-    var _dup = _checkDup(r);
+    var _dup = r._existingMatch || null;
     var _isDup = _dup !== null;
     var _isDupIA = !_isDup && r._iaDupSemantic === true;
 
@@ -4842,7 +4822,7 @@ function renderImportPreview(rows) {
 
   rows.forEach(function(r, i) {
     var rowHtml = _buildImportRow(r, (r._origIdx !== undefined ? r._origIdx : i));
-    if (_checkDup(r) !== null) {
+    if (r._existingMatch) {
       htmlDup += rowHtml;
     } else if (!(r.categoria || r.xlsxCat || suggestCat(r.desc))) {
       htmlNaoId += rowHtml;
@@ -4862,13 +4842,13 @@ function renderImportPreview(rows) {
   document.getElementById('importTableDups').innerHTML = htmlDup;
 
   // Seção Novos
-  var newCount = rows.filter(function(r) { return _checkDup(r) === null && (r.categoria || r.xlsxCat || suggestCat(r.desc)); }).length;
+  var newCount = rows.filter(function(r) { return !r._existingMatch && (r.categoria || r.xlsxCat || suggestCat(r.desc)); }).length;
   var newCountEl = document.getElementById('imp-new-count');
   if (newCountEl) newCountEl.textContent = newCount + ' lançamento' + (newCount !== 1 ? 's' : '');
   document.getElementById('importTableNew').innerHTML = htmlNew;
 
   // Seção Não identificados
-  var naoIdCount = rows.filter(function(r) { return _checkDup(r) === null && !(r.categoria || r.xlsxCat || suggestCat(r.desc)); }).length;
+  var naoIdCount = rows.filter(function(r) { return !r._existingMatch && !(r.categoria || r.xlsxCat || suggestCat(r.desc)); }).length;
   var naoIdCountEl = document.getElementById('imp-naoid-count');
   if (naoIdCountEl) naoIdCountEl.textContent = naoIdCount + ' lançamento' + (naoIdCount !== 1 ? 's' : '') + ' sem categoria identificada';
   var naoIdTable = document.getElementById('importTableNaoId');
