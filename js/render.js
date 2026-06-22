@@ -5081,20 +5081,31 @@ function conferirFaturaPlataforma() {
     return vm === alvoMes && va === alvoAno;
   });
 
-  // Matching por descrição normalizada + valor absoluto (multiset)
-  var norm = function(s) { return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); };
-  var keyOf = function(desc, val) { return norm(desc) + '|' + Math.abs(parseFloat(val) || 0).toFixed(2); };
-  var platMap = {};
-  plat.forEach(function(l) { var k = keyOf(l.desc, l.valor); (platMap[k] = platMap[k] || []).push(l); });
+  // Matching robusto: descrições podem vir ilegíveis ("????L") ou com codificação
+  // diferente entre fatura e plataforma. Normaliza forte (só letras/números) e,
+  // se a descrição não casar, faz 2ª passada por DATA + VALOR.
+  var norm = function(s) { return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ''); };
+  var normDate = function(s) {
+    s = String(s || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+  };
+  var money = function(v) { return Math.abs(parseFloat(v) || 0).toFixed(2); };
 
+  var platItems = plat.map(function(l) {
+    return { l: l, desc: norm(l.desc), date: normDate(l.data || l.vencimento), val: money(l.valor), used: false };
+  });
   var faltando = []; // na fatura, sem correspondência na plataforma
   importParsedRows.forEach(function(r) {
-    var k = keyOf(r.desc, r.value);
-    if (platMap[k] && platMap[k].length) platMap[k].shift();
-    else faltando.push(r);
+    var rd = norm(r.desc), rdate = normDate(r.date), rval = money(r.value);
+    // 1ª passada: descrição (normalizada) + valor; 2ª passada: data + valor
+    var m = null, i;
+    for (i = 0; i < platItems.length; i++) { var p = platItems[i]; if (!p.used && p.val === rval && rd && p.desc === rd) { m = p; break; } }
+    if (!m) for (i = 0; i < platItems.length; i++) { var p2 = platItems[i]; if (!p2.used && p2.val === rval && rdate && p2.date === rdate) { m = p2; break; } }
+    if (m) m.used = true; else faltando.push(r);
   });
-  var soPlat = []; // na plataforma, sem correspondência na fatura
-  Object.keys(platMap).forEach(function(k) { platMap[k].forEach(function(l) { soPlat.push(l); }); });
+  var soPlat = platItems.filter(function(p) { return !p.used; }).map(function(p) { return p.l; }); // na plataforma, sem corresponder na fatura
 
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0);
