@@ -2168,6 +2168,12 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
             <button onclick="applyBulkPgto(false)" style="background:var(--accent2);border:none;color:#000;border-radius:5px;padding:2px 8px;font-size:0.72rem;cursor:pointer;font-weight:700">↓ Vazios</button>
             <button onclick="applyBulkPgto(true)" style="background:var(--surface);border:1px solid var(--accent2);color:var(--accent2);border-radius:5px;padding:2px 8px;font-size:0.72rem;cursor:pointer">↓↓ Todos</button>
           </div>
+          <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 8px">
+            <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap">Vencimento em massa:</span>
+            <input type="date" id="bulkVencInput" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:2px 5px;font-size:0.75rem;width:130px">
+            <button onclick="applyBulkVenc(false)" style="background:var(--accent2);border:none;color:#000;border-radius:5px;padding:2px 8px;font-size:0.72rem;cursor:pointer;font-weight:700">↓ Vazios</button>
+            <button onclick="applyBulkVenc(true)" style="background:var(--surface);border:1px solid var(--accent2);color:var(--accent2);border-radius:5px;padding:2px 8px;font-size:0.72rem;cursor:pointer">↓↓ Todos</button>
+          </div>
           <label style="font-size:0.8rem;color:var(--text2);cursor:pointer;">
             <input type="checkbox" id="importSelectAll" checked onchange="toggleImportAll(this.checked)"> Selecionar todos
           </label>
@@ -2924,7 +2930,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606221200"></script>
+<script src="js/render.js?v=202606221400"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

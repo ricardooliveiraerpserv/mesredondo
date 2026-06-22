@@ -3175,6 +3175,47 @@ function openImportItauRaw() {
   if (inp) { inp.value = ''; inp.click(); }
 }
 
+// Define o vencimento em massa nas linhas do preview de importação.
+// all=false → só preenche as linhas SEM vencimento; all=true → sobrescreve todas.
+function applyBulkVenc(all) {
+  var inp = document.getElementById('bulkVencInput');
+  var iso = inp ? inp.value : '';
+  if (!iso) { alert('Escolha uma data de vencimento primeiro.'); return; }
+  var br = iso.split('-').reverse().join('/');
+  var n = 0;
+  document.querySelectorAll('.import-venc').forEach(function(el) {
+    if (all || !el.value) {
+      el.value = iso;
+      el.dataset.brval = br;
+      // limpa destaque de erro deixado por confirmImport
+      el.style.borderColor = 'var(--border)';
+      el.style.background = 'var(--surface)';
+      el.style.color = 'var(--accent2)';
+      el.placeholder = '';
+      n++;
+    }
+  });
+  var banner = document.getElementById('importVencBanner');
+  if (banner) banner.style.display = 'none';
+  if (typeof updateImportTotals === 'function') { try { updateImportTotals(); } catch (e) {} }
+}
+
+// Define o pagamento em massa nas linhas do preview de importação.
+function applyBulkPgto(all) {
+  var sel = document.getElementById('bulkPgtoSelect');
+  var val = sel ? sel.value : '';
+  if (!val) { alert('Escolha um pagamento primeiro.'); return; }
+  var n = 0;
+  document.querySelectorAll('.import-pgto').forEach(function(s) {
+    if (all || !s.value) {
+      var has = Array.prototype.some.call(s.options, function(o) { return o.value === val; });
+      if (!has) { var o = document.createElement('option'); o.value = val; o.textContent = val; s.appendChild(o); }
+      s.value = val;
+      n++;
+    }
+  });
+}
+
 function closeImportModal() {
   document.getElementById('importModalOverlay').classList.remove('open');
   importParsedRows = [];

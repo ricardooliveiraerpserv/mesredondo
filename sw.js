@@ -2,7 +2,7 @@
 // Estratégia: network-first com fallback pro cache. Permite uso offline
 // preservando dados em cache, mas sempre tenta buscar versão fresca antes.
 
-const CACHE_NAME = 'mesredondo-v3';
+const CACHE_NAME = 'mesredondo-v4';
 const ASSETS = [
   './',
   './index.html',
