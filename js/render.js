@@ -3246,6 +3246,7 @@ function handleImportDrop(e) {
 
 function handleImportFile(file) {
   if (!file) return;
+  if (typeof window !== 'undefined') window._itauVencimentoBr = '';
   var reader = new FileReader();
   // XLSX = ZIP (magic bytes PK), XLS = OLE2 (magic D0 CF)
   reader.onload = function(e) {
@@ -3577,6 +3578,7 @@ function processXLSXData(sstXml, wsXml) {
   // Cabeçalho: Data | Lançamento | Parcelamento | Valor | … | Nome — a Data NÃO fica na col A
   // (há metadados de nome/agência/conta/total acima) e a coluna de descrição é "Lançamento".
   var itauRaw = false;
+  var itauVencBr = ''; // vencimento da fatura (DD/MM/YYYY), extraído do topo do arquivo
   var _forceItau = (typeof window !== 'undefined' && window._importMode === 'itau');
   (function detectItau() {
     var normH = function(x) { return String(x == null ? '' : x).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
@@ -3601,7 +3603,30 @@ function processXLSXData(sstXml, wsXml) {
         break;
       }
     }
+    if (!itauRaw) return;
+    // Vencimento da fatura: label "Vencimento" no bloco de metadados (acima do header)
+    // + serial/data na MESMA coluna na(s) linha(s) abaixo do label.
+    var vCol = -1, vRow = -1;
+    for (var pj = 0; pj < parsedRows.length; pj++) {
+      var pr2 = parsedRows[pj];
+      if (pr2.r >= headerRowIdx) break;
+      var ks = Object.keys(pr2.cells);
+      for (var ki = 0; ki < ks.length; ki++) {
+        if (normH(pr2.cells[ks[ki]]) === 'vencimento') { vCol = parseInt(ks[ki]); vRow = pr2.r; break; }
+      }
+      if (vCol >= 0) break;
+    }
+    if (vCol >= 0) {
+      for (var pk = 0; pk < parsedRows.length; pk++) {
+        var pr3 = parsedRows[pk];
+        if (pr3.r <= vRow || pr3.r >= headerRowIdx) continue;
+        var v = pr3.cells[vCol];
+        if (typeof v === 'number') { itauVencBr = excelDate(v); break; }
+        if (typeof v === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(v.trim())) { itauVencBr = v.trim(); break; }
+      }
+    }
   })();
+  if (typeof window !== 'undefined') window._itauVencimentoBr = itauVencBr;
   if (_forceItau && !itauRaw) {
     alert('Não reconheci o layout da fatura Itaú neste arquivo.\nUse o .xlsx exportado pelo app (Fatura Fechada), sem editar o cabeçalho.');
     return;
@@ -3698,6 +3723,8 @@ function processXLSXData(sstXml, wsXml) {
 
     // Vencimento string
     var vencStr = typeof vencRaw === 'string' ? vencRaw : (typeof vencRaw === 'number' ? excelDate(vencRaw) : '');
+    // Itaú: usa o vencimento da própria fatura (topo do arquivo) como padrão de todas as linhas
+    if (itauRaw && itauVencBr) vencStr = itauVencBr;
 
     // Parcela
     var parcAtual = null, parcTotal = null, cleanDesc = descVal;
@@ -3752,6 +3779,12 @@ function processXLSXData(sstXml, wsXml) {
   importParsedRows = rows;
   // Renderiza preview diretamente (IA de categorização disponível via botão)
   renderImportPreview(rows);
+  // Itaú: pré-carrega o campo "Vencimento em massa" com o vencimento da fatura,
+  // pronto pra alterar a importação inteira num clique.
+  if (itauRaw && itauVencBr) {
+    var _bv = document.getElementById('bulkVencInput');
+    if (_bv && /^\d{2}\/\d{2}\/\d{4}$/.test(itauVencBr)) _bv.value = itauVencBr.split('/').reverse().join('-');
+  }
   // Injeta botões de IA após renderizar
   if (typeof iaInjetarBotaoImport === 'function') {
     setTimeout(iaInjetarBotaoImport, 100);
