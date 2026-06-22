@@ -5168,6 +5168,36 @@ function closeReconcile() {
   if (ov) ov.style.display = 'none';
 }
 
+function _toggleAllExtras(checked) {
+  document.querySelectorAll('.reconcile-extra-chk').forEach(function(c) { c.checked = checked; });
+}
+
+// Exclui da plataforma os "extras" marcados (lançamentos do cartão sem par na fatura).
+async function _excluirExtrasItau() {
+  var ids = [];
+  document.querySelectorAll('.reconcile-extra-chk:checked').forEach(function(c) {
+    var id = c.dataset.id;
+    if (id !== undefined && id !== '') ids.push(id);
+  });
+  if (!ids.length) { alert('Marque ao menos um lançamento para excluir.'); return; }
+  var msg = 'Excluir DEFINITIVAMENTE ' + ids.length + ' lançamento(s) "extra" do cartão (sem correspondência nesta fatura)?\n\nRemove da plataforma — não dá para desfazer.';
+  var ok = (typeof _showSimpleConfirm === 'function')
+    ? await _showSimpleConfirm('🗑 Excluir extras', msg, 'Excluir ' + ids.length, 'var(--red)')
+    : confirm(msg);
+  if (!ok) return;
+  var idsSet = {};
+  ids.forEach(function(id) { idsSet[String(id)] = true; });
+  ids.forEach(function(id) { if (typeof _addTombstone === 'function') _addTombstone(id); });
+  if (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) {
+    _memCache.lancamentos = _memCache.lancamentos.filter(function(l) { return !idsSet[String(l.id)]; });
+  }
+  ids.forEach(function(id) { if (typeof dbDeleteLancamento === 'function') dbDeleteLancamento(id).catch(function(e) { console.warn('[excluirExtras]', e && e.message); }); });
+  if (typeof renderAll === 'function') { try { renderAll(); } catch (e) {} }
+  if (typeof renderCartoesTab === 'function') { try { renderCartoesTab(); } catch (e) {} }
+  alert('🗑 ' + ids.length + ' extra(s) excluído(s). Reconferindo…');
+  conferirFaturaPlataforma(); // recomputa o relatório com a base já limpa
+}
+
 // ── Desmembrar lançamento: parte do valor vai para um terceiro ───────────────
 // Modelo padrão do app: a parte do terceiro vira despesa "Dividas de terceiros"
 // (no cartão) + espelho "Entrada Terceiro" (conta a receber, pendente).
@@ -5345,7 +5375,24 @@ function conferirFaturaPlataforma() {
   } else {
     if (faltando.length) H.push(tabela('🔴 Na fatura, FALTANDO na plataforma', '#ef4444', faltando, function(r){return r.date;}, function(r){return r.desc;}, function(r){return r.value;}, faltandoTot));
     if (emOutro.length) H.push(tabela('🟠 Na fatura, mas com VENCIMENTO em outro mês (não entra no card de ' + (alvoLabel || '—') + ')', '#fb923c', emOutro, function(x){return x.r.date + ' → venc ' + (x.pr.m ? String(x.pr.m).padStart(2,'0') + '/' + x.pr.a : '?');}, function(x){return x.r.desc;}, function(x){return x.r.value;}, emOutroTot));
-    H.push(tabela('🟡 Na plataforma, SEM corresponder na fatura', 'var(--accent)', soPlat, function(l){return l.data || l.vencimento;}, function(l){return l.desc;}, function(l){return l.valor;}, soPlatTot));
+    // Extras: tabela com checkbox + botão de exclusão (limpar lixo de importações antigas)
+    var ex = '<div style="margin-bottom:14px">';
+    ex += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">';
+    ex += '<span style="font-weight:700;color:var(--accent)">🟡 Na plataforma, SEM corresponder na fatura (' + soPlat.length + ') — ' + f(soPlatTot) + '</span>';
+    if (soPlat.length) ex += '<button onclick="_excluirExtrasItau()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.45);color:#ef4444;border-radius:7px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer">🗑 Excluir marcados</button>';
+    ex += '</div>';
+    if (!soPlat.length) { ex += '<div style="color:var(--muted);font-size:0.78rem">— nenhum —</div></div>'; H.push(ex); }
+    else {
+      ex += '<div style="color:var(--muted);font-size:0.72rem;margin-bottom:6px">Marque os que são lixo (importação antiga/duplicada) e clique excluir. <strong>Desmarque o que quiser manter.</strong> Exclusão definitiva.</div>';
+      ex += '<div style="max-height:34vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.76rem">';
+      ex += '<thead><tr style="position:sticky;top:0;background:var(--surface2)"><th style="padding:5px 8px"><input type="checkbox" checked onchange="_toggleAllExtras(this.checked)"></th><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:left;padding:5px 8px">Descrição</th><th style="text-align:right;padding:5px 8px">Valor</th></tr></thead><tbody>';
+      soPlat.forEach(function(l) {
+        var idAttr = String(l.id != null ? l.id : '').replace(/"/g, '&quot;');
+        ex += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;text-align:center"><input type="checkbox" class="reconcile-extra-chk" data-id="' + idAttr + '" checked></td><td style="padding:4px 8px;white-space:nowrap;color:var(--text2)">' + (l.data || l.vencimento || '') + '</td><td style="padding:4px 8px">' + (l.desc || '') + '</td><td style="padding:4px 8px;text-align:right">' + f(Math.abs(parseFloat(l.valor) || 0)) + '</td></tr>';
+      });
+      ex += '</tbody></table></div></div>';
+      H.push(ex);
+    }
   }
   if (!temDedup) H.push('<div style="color:#ef4444;font-size:0.74rem;margin-top:8px">⚠️ Detecção de duplicados ainda não rodou — feche e reabra o preview da fatura antes de conferir.</div>');
   if (!alvoMes) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-top:8px">⚠️ Sem mês de vencimento definido — a lista "sem corresponder" considera TODOS os lançamentos Black Itaú. Defina o "Vencimento em massa" para filtrar por 06/2026.</div>');
