@@ -5075,9 +5075,30 @@ function updateImportTotals() {
   _renderItauDiag(totalDesp, qtd);
 }
 
-// Rotina de diagnóstico: separa as compras da fatura em "já na plataforma"
-// (duplicados, mesma detecção das abas) e "novos a importar". NÃO confunde com
-// o que está selecionado — duplicados desmarcados não são "faltando".
+// Total REAL na plataforma para o cartão Black Itaú, com o MESMO critério do card
+// (cartoes-config.js): despesa, agrupado por l.mes/l.ano, excluindo espelho e
+// "Entrada Terceiro". Mês/ano vem do "Vencimento em massa" (ou do venc da fatura).
+function _platTotalItau() {
+  var m = null, a = null;
+  var bv = document.getElementById('bulkVencInput');
+  if (bv && /^\d{4}-\d{2}-\d{2}$/.test(bv.value)) { var p = bv.value.split('-'); a = parseInt(p[0]); m = parseInt(p[1]); }
+  else if (window._itauVencimentoBr && /^\d{2}\/\d{2}\/\d{4}$/.test(window._itauVencimentoBr)) { var q = window._itauVencimentoBr.split('/'); m = parseInt(q[1]); a = parseInt(q[2]); }
+  var all = (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) ? _memCache.lancamentos : [];
+  var np = function(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
+  var tot = 0, n = 0;
+  all.forEach(function(l) {
+    if (np(l.pagamento).indexOf('black ita') === -1) return;
+    if (l.tipo && l.tipo !== 'despesa') return;
+    if (l._espelhoDe) return;
+    if (l.categoria === 'Entrada Terceiro') return;
+    if (m && (Number(l.mes) !== m || Number(l.ano) !== a)) return;
+    tot += parseFloat(l.valor) || 0; n++;
+  });
+  return { tot: Math.abs(tot), n: n, m: m, a: a };
+}
+
+// Diagnóstico: compras da fatura × o que JÁ está na plataforma (total real do
+// cartão, batendo com o card) × novos a importar. Não confunde com a seleção.
 function _renderItauDiag(selSum, selCount) {
   var el = document.getElementById('importDiagPanel');
   if (!el) return;
@@ -5088,8 +5109,8 @@ function _renderItauDiag(selSum, selCount) {
   var novos = rows.filter(function(r) { return !r._existingMatch; });
   var novosTot = novos.reduce(function(s, r) { return s + (r.value || 0); }, 0);
   var jaN = rows.length - novos.length;
-  var jaTot = d.comprasSum - novosTot;
-  // Novos que NÃO estão marcados (estes sim precisam de atenção)
+  var plat = _platTotalItau();
+  var mmaa = plat.m ? String(plat.m).padStart(2, '0') + '/' + plat.a : '';
   var novosNaoMarcados = 0, novosNaoMarcadosTot = 0;
   novos.forEach(function(r) {
     var cb = document.querySelector('.import-check[data-idx="' + r._origIdx + '"]');
@@ -5099,20 +5120,24 @@ function _renderItauDiag(selSum, selCount) {
   L.push('<div style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:0.72rem;margin-bottom:6px;color:var(--text)">🔎 Conferência da fatura Itaú</div>');
   L.push('<div style="display:flex;flex-wrap:wrap;gap:14px;color:var(--text2)">');
   L.push('<span>Compras na fatura: <strong>' + f(d.comprasSum) + '</strong> (' + d.comprasN + ')</span>');
-  L.push('<span>Já na plataforma: <strong style="color:var(--green)">' + f(jaTot) + '</strong> (' + jaN + ')</span>');
+  L.push('<span>No cartão na plataforma' + (mmaa ? ' (' + mmaa + ')' : '') + ': <strong style="color:var(--green)">' + f(plat.tot) + '</strong> (' + plat.n + ')</span>');
   L.push('<span>Novos a importar: <strong style="color:' + (novos.length ? 'var(--accent)' : 'var(--green)') + '">' + f(novosTot) + '</strong> (' + novos.length + ')</span>');
   if (d.estornoN > 0) L.push('<span>Estornos não importados: <strong>-' + f(d.estornoSum) + '</strong> (' + d.estornoN + ')</span>');
   L.push('</div>');
   if (!novos.length) {
-    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ Nada novo: as ' + d.comprasN + ' compras desta fatura já estão na plataforma.</div>');
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ Nada novo: as ' + d.comprasN + ' compras desta fatura já estão lançadas (' + jaN + ' duplicados).</div>');
     el.style.borderColor = 'rgba(74,240,160,0.4)'; el.style.background = 'rgba(74,240,160,0.07)';
   } else if (novosNaoMarcados > 0) {
-    L.push('<div style="margin-top:6px;font-weight:700;color:var(--accent)">' + novos.length + ' novo(s) a importar (R$ ' + f(novosTot) + '). ⚠️ ' + novosNaoMarcados + ' novo(s) estão DESMARCADOS (R$ ' + f(novosNaoMarcadosTot) + ') — veja a aba ✚ Novos.</div>');
-    L.push('<div style="margin-top:2px;color:var(--muted);font-size:0.74rem">Os ' + jaN + ' duplicados já estão na plataforma e não precisam ser reimportados (por isso ficam desmarcados).</div>');
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--accent)">' + novos.length + ' novo(s) a importar (R$ ' + f(novosTot) + '). ⚠️ ' + novosNaoMarcados + ' DESMARCADO(s) (R$ ' + f(novosNaoMarcadosTot) + ') — veja a aba ✚ Novos.</div>');
     el.style.borderColor = 'rgba(240,192,64,0.45)'; el.style.background = 'rgba(240,192,64,0.08)';
   } else {
-    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ ' + novos.length + ' novo(s) marcado(s) para importar (R$ ' + f(novosTot) + '). Os ' + jaN + ' duplicados já estão na plataforma.</div>');
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ ' + novos.length + ' novo(s) marcado(s) p/ importar (R$ ' + f(novosTot) + '). ' + jaN + ' duplicados já estão na plataforma.</div>');
     el.style.borderColor = 'rgba(74,240,160,0.4)'; el.style.background = 'rgba(74,240,160,0.07)';
+  }
+  // Por que o "no cartão" difere das compras da fatura
+  var difFP = d.comprasSum - plat.tot;
+  if (Math.abs(difFP) > 0.01) {
+    L.push('<div style="margin-top:4px;color:var(--muted);font-size:0.74rem">Compras da fatura (' + f(d.comprasSum) + ') × cartão na plataforma (' + f(plat.tot) + ') diferem em ' + f(Math.abs(difFP)) + ': estornos/créditos não lançados (−' + f(d.estornoSum) + ') + compras que o corte (dia 8) jogou para outro mês. Detalhe em 🔍 Conferir × plataforma.</div>');
   }
   el.innerHTML = L.join('');
   el.style.display = 'block';
