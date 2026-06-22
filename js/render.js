@@ -4581,6 +4581,8 @@ function renderImportPreview(rows) {
   var _byValParcDate = {}; // valor + total de parcelas + data da compra
   var _byValDate = {};     // valor + data da compra (qualquer desc/parcela)
   var _byValParc = {};     // valor + total de parcelas (sem data)
+  var _bySplitFull = {};   // valor CHEIO de um lançamento desmembrado (marcador _splitFull)
+  var _grpParcDate = {};   // grupo p/ detectar split por SOMA das partes (mesma data+parcelas)
   _allExist.forEach(function(l) {
     var dn = _stripParc(l.desc);
     var v  = Math.round(Math.abs(_valorExib(l)||0)*100);
@@ -4600,7 +4602,33 @@ function renderImportPreview(rows) {
       if (dt && !_byValParcDate[t+'|'+v+'|'+pt+'|'+dt]) _byValParcDate[t+'|'+v+'|'+pt+'|'+dt] = l;
       if (!_byValParc[t+'|'+v+'|'+pt]) _byValParc[t+'|'+v+'|'+pt] = l;
     }
+    // Marcador de desmembramento: o lançamento sabe seu valor cheio original
+    if (l._splitFull) {
+      var fc = Math.round(Math.abs(l._splitFull)*100);
+      if (dt) _bySplitFull[t+'|'+fc+'|'+dt] = l;
+      if (pt && pt > 1) { _bySplitFull[t+'|'+fc+'|'+pt+'|'+dt] = l; _bySplitFull[t+'|'+fc+'|'+pt] = l; }
+    }
+    // Grupo p/ split por soma (lançamentos parcelados de mesma data+totalParcelas)
+    if (pt && pt > 1 && dt) {
+      var gk = t+'|'+pt+'|'+dt;
+      (_grpParcDate[gk] = _grpParcDate[gk] || []).push({ l: l, c: v });
+    }
   });
+
+  // Detecta se um subconjunto das partes (mesma data+parcelas) soma o valor cheio
+  var _splitSumMatch = function(t, vCents, pt, dt) {
+    if (!(pt > 1) || !dt) return null;
+    var grp = _grpParcDate[t+'|'+pt+'|'+dt];
+    if (!grp || grp.length < 2) return null;
+    var arr = grp.map(function(x){ return x.c; });
+    var n = Math.min(arr.length, 14); // limita o nº de combinações
+    for (var mask = 1; mask < (1 << n); mask++) {
+      var s = 0, bits = 0;
+      for (var j = 0; j < n; j++) if (mask & (1 << j)) { s += arr[j]; bits++; }
+      if (bits >= 2 && s === vCents) return grp[0].l; // soma das partes = valor cheio
+    }
+    return null;
+  };
 
   var _checkDup = function(r) {
     var dn  = _stripParc(r.desc || r.descRaw);
@@ -4639,6 +4667,12 @@ function renderImportPreview(rows) {
     if (_pt > 1 && dt && _byValParcDate[t+'|'+v+'|'+_pt+'|'+dt]) return _byValParcDate[t+'|'+v+'|'+_pt+'|'+dt];
     if (dt && _byValDate[t+'|'+v+'|'+dt]) return _byValDate[t+'|'+v+'|'+dt];
     if (_pt > 1 && _byValParc[t+'|'+v+'|'+_pt]) return _byValParc[t+'|'+v+'|'+_pt];
+    // Desmembrado: a compra foi dividida. Casa pelo marcador _splitFull (valor cheio)
+    // ou detectando que as partes na plataforma SOMAM o valor cheio da fatura.
+    if (_pt > 1 && dt && _bySplitFull[t+'|'+v+'|'+_pt+'|'+dt]) return _bySplitFull[t+'|'+v+'|'+_pt+'|'+dt];
+    if (dt && _bySplitFull[t+'|'+v+'|'+dt]) return _bySplitFull[t+'|'+v+'|'+dt];
+    var _sm = _splitSumMatch(t, v, _pt, dt);
+    if (_sm) return _sm;
 
     return null;
   };
@@ -5041,36 +5075,44 @@ function updateImportTotals() {
   _renderItauDiag(totalDesp, qtd);
 }
 
-// Rotina de diagnóstico: confere o total declarado da fatura Itaú contra as compras
-// detectadas e o que está selecionado, apontando quanto/quantos faltam (valor abaixo).
+// Rotina de diagnóstico: separa as compras da fatura em "já na plataforma"
+// (duplicados, mesma detecção das abas) e "novos a importar". NÃO confunde com
+// o que está selecionado — duplicados desmarcados não são "faltando".
 function _renderItauDiag(selSum, selCount) {
   var el = document.getElementById('importDiagPanel');
   if (!el) return;
   var d = (typeof window !== 'undefined') ? window._itauDiag : null;
   if (!d) { el.style.display = 'none'; return; }
   var f = fmtBR;
-  var falta = d.comprasSum - selSum;     // parte das compras NÃO selecionada
-  var faltaN = d.comprasN - selCount;
-  var ok = Math.abs(falta) < 0.005;
+  var rows = importParsedRows || [];
+  var novos = rows.filter(function(r) { return !r._existingMatch; });
+  var novosTot = novos.reduce(function(s, r) { return s + (r.value || 0); }, 0);
+  var jaN = rows.length - novos.length;
+  var jaTot = d.comprasSum - novosTot;
+  // Novos que NÃO estão marcados (estes sim precisam de atenção)
+  var novosNaoMarcados = 0, novosNaoMarcadosTot = 0;
+  novos.forEach(function(r) {
+    var cb = document.querySelector('.import-check[data-idx="' + r._origIdx + '"]');
+    if (cb && !cb.checked) { novosNaoMarcados++; novosNaoMarcadosTot += r.value || 0; }
+  });
   var L = [];
   L.push('<div style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:0.72rem;margin-bottom:6px;color:var(--text)">🔎 Conferência da fatura Itaú</div>');
   L.push('<div style="display:flex;flex-wrap:wrap;gap:14px;color:var(--text2)">');
-  if (d.declarado != null) L.push('<span>Total declarado: <strong>' + f(d.declarado) + '</strong></span>');
   L.push('<span>Compras na fatura: <strong>' + f(d.comprasSum) + '</strong> (' + d.comprasN + ')</span>');
-  if (d.estornoN > 0) L.push('<span>Estornos/créditos não importados: <strong>-' + f(d.estornoSum) + '</strong> (' + d.estornoN + ')</span>');
-  L.push('<span>Selecionado p/ importar: <strong>' + f(selSum) + '</strong> (' + selCount + ' de ' + d.comprasN + ')</span>');
+  L.push('<span>Já na plataforma: <strong style="color:var(--green)">' + f(jaTot) + '</strong> (' + jaN + ')</span>');
+  L.push('<span>Novos a importar: <strong style="color:' + (novos.length ? 'var(--accent)' : 'var(--green)') + '">' + f(novosTot) + '</strong> (' + novos.length + ')</span>');
+  if (d.estornoN > 0) L.push('<span>Estornos não importados: <strong>-' + f(d.estornoSum) + '</strong> (' + d.estornoN + ')</span>');
   L.push('</div>');
-  if (ok) {
-    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ Importação completa: todas as ' + d.comprasN + ' compras estão selecionadas.</div>');
-    if (d.declarado != null && d.estornoN > 0) L.push('<div style="margin-top:2px;color:var(--muted);font-size:0.74rem">A fatura declara ' + f(d.declarado) + ' = compras − ' + f(d.estornoSum) + ' de estornos/créditos (não lançados como despesa).</div>');
+  if (!novos.length) {
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ Nada novo: as ' + d.comprasN + ' compras desta fatura já estão na plataforma.</div>');
     el.style.borderColor = 'rgba(74,240,160,0.4)'; el.style.background = 'rgba(74,240,160,0.07)';
-  } else if (falta > 0) {
-    L.push('<div style="margin-top:6px;font-weight:700;color:#ef4444">⚠️ ABAIXO DA FATURA: faltam ' + f(falta) + ' em ' + faltaN + ' lançamento(s) não selecionado(s).</div>');
-    L.push('<div style="margin-top:2px;color:var(--muted);font-size:0.74rem">Revise as abas “⚠️ Duplicados” e “❓ Não identificados” — desmarcados não entram na importação. Use “☑ Marcar todos” se forem válidos.</div>');
-    el.style.borderColor = 'rgba(239,68,68,0.45)'; el.style.background = 'rgba(239,68,68,0.08)';
-  } else {
-    L.push('<div style="margin-top:6px;font-weight:700;color:var(--accent)">⚠️ ACIMA das compras da fatura por ' + f(-falta) + ' — verifique lançamentos marcados a mais.</div>');
+  } else if (novosNaoMarcados > 0) {
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--accent)">' + novos.length + ' novo(s) a importar (R$ ' + f(novosTot) + '). ⚠️ ' + novosNaoMarcados + ' novo(s) estão DESMARCADOS (R$ ' + f(novosNaoMarcadosTot) + ') — veja a aba ✚ Novos.</div>');
+    L.push('<div style="margin-top:2px;color:var(--muted);font-size:0.74rem">Os ' + jaN + ' duplicados já estão na plataforma e não precisam ser reimportados (por isso ficam desmarcados).</div>');
     el.style.borderColor = 'rgba(240,192,64,0.45)'; el.style.background = 'rgba(240,192,64,0.08)';
+  } else {
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ ' + novos.length + ' novo(s) marcado(s) para importar (R$ ' + f(novosTot) + '). Os ' + jaN + ' duplicados já estão na plataforma.</div>');
+    el.style.borderColor = 'rgba(74,240,160,0.4)'; el.style.background = 'rgba(74,240,160,0.07)';
   }
   el.innerHTML = L.join('');
   el.style.display = 'block';
@@ -5358,6 +5400,7 @@ function _doImportInner() {
     var tval = Math.round(rr._split.value * 100) / 100;
     if (tval >= full) { lancamentos.push(obj); added++; return; } // proteção
     var sign = obj.valor < 0 ? -1 : 1;
+    obj._splitFull = full; // valor cheio original (p/ dedup reconhecer no reimport)
     obj.valor = sign * (Math.round((full - tval) * 100) / 100); // minha parte
     lancamentos.push(obj); added++;
     var t = Object.assign({}, obj, {
