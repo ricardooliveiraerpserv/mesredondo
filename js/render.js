@@ -1031,7 +1031,7 @@ function _showSimpleConfirm(title, msg, btnLabel, btnColor) {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = '_simpleConfirmModal';
-      modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;';
+      modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:10060;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:16px;';
       modal.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:380px;">' +
         '<h3 id="_scTitle" style="margin:0 0 12px;font-size:1rem;color:var(--text)"></h3>' +
         '<p id="_scMsg" style="font-size:0.85rem;color:var(--text2);margin:0 0 20px;white-space:pre-line"></p>' +
@@ -1046,6 +1046,7 @@ function _showSimpleConfirm(title, msg, btnLabel, btnColor) {
     var okBtn = document.getElementById('_scOk');
     okBtn.textContent = btnLabel || 'Confirmar';
     okBtn.style.background = btnColor || 'var(--accent)';
+    modal.style.zIndex = '10060'; // sempre acima dos overlays (conferência/split)
     modal.style.display = 'flex';
     okBtn.onclick = function() { modal.style.display = 'none'; resolve(true); };
     document.getElementById('_scCancel').onclick = function() { modal.style.display = 'none'; resolve(false); };
