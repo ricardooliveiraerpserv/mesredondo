@@ -5069,16 +5069,18 @@ function conferirFaturaPlataforma() {
   else if (window._itauVencimentoBr && /^\d{2}\/\d{2}\/\d{4}$/.test(window._itauVencimentoBr)) { var q = window._itauVencimentoBr.split('/'); alvoMes = parseInt(q[1]); alvoAno = parseInt(q[2]); }
   if (alvoMes) alvoLabel = String(alvoMes).padStart(2, '0') + '/' + alvoAno;
 
-  // Lançamentos da plataforma: Black Itaú + vencimento no mês/ano alvo
+  // Lançamentos da plataforma — usa o MESMO critério do card do cartão (cartoes-config.js):
+  // pagamento Black Itaú, tipo despesa, agrupado por l.mes/l.ano (mês da fatura, NÃO o
+  // vencimento), excluindo espelhos e categoria "Entrada Terceiro" (não são gasto real).
   var all = (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) ? _memCache.lancamentos : [];
   var npg = function(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
   var plat = all.filter(function(l) {
     if (npg(l.pagamento).indexOf('black ita') === -1) return false;
+    if (l.tipo && l.tipo !== 'despesa') return false;
+    if (l._espelhoDe) return false;
+    if (l.categoria === 'Entrada Terceiro') return false;
     if (!alvoMes) return true;
-    var vm = null, va = null;
-    if (l.vencimento && /^\d{2}\/\d{2}\/\d{4}$/.test(l.vencimento)) { var vp = l.vencimento.split('/'); vm = parseInt(vp[1]); va = parseInt(vp[2]); }
-    else { vm = l.mes; va = l.ano; }
-    return vm === alvoMes && va === alvoAno;
+    return Number(l.mes) === alvoMes && Number(l.ano) === alvoAno;
   });
 
   // Consistência TOTAL com a aba "Novos/Duplicados": usa o MESMO resultado do dedup
@@ -5092,18 +5094,19 @@ function conferirFaturaPlataforma() {
 
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
-  var jaLancadoTot = faturaTot - faltandoTot;
-  var jaLancadoN = importParsedRows.length - faltando.length;
+  var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0); // total REAL na plataforma (deve bater com o card)
+  var platAbs = Math.abs(platTot);
   var soPlatTot = soPlat.reduce(function(s, l) { return s + Math.abs(parseFloat(l.valor) || 0); }, 0);
+  var difer = faturaTot - platAbs;
   var d = window._itauDiag || {};
 
   var H = [];
   H.push('<div style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">');
   H.push('<span>Fatura (compras): <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
-  H.push('<span>Já na plataforma: <strong style="color:var(--green)">' + f(jaLancadoTot) + '</strong> (' + jaLancadoN + ')</span>');
-  H.push('<span>Faltando: <strong style="color:' + (faltando.length ? '#ef4444' : 'var(--green)') + '">' + f(faltandoTot) + '</strong> (' + faltando.length + ')</span>');
+  H.push('<span>Na plataforma (Black Itaú' + (alvoLabel ? ' venc ' + alvoLabel : '') + '): <strong>' + f(platAbs) + '</strong> (' + plat.length + ')</span>');
+  H.push('<span>Diferença: <strong style="color:' + (Math.abs(difer) < 0.005 ? 'var(--green)' : '#ef4444') + '">' + (difer >= 0 ? '+' : '-') + f(Math.abs(difer)) + '</strong></span>');
   H.push('</div>');
-  H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:8px">“Faltando” usa a mesma detecção da aba <strong>✚ Novos</strong> (compara com a base inteira, ciente de parcela). “Sem corresponder” lista o que está na plataforma como Black Itaú venc ' + (alvoLabel || '—') + ' e não tem par na fatura.</div>');
+  H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:8px">“Na plataforma” soma os lançamentos Black Itaú venc ' + (alvoLabel || '—') + ' (deve bater com o card do cartão). A diferença vem das duas listas: o que falta lançar (fatura sem par) menos o que está a mais na plataforma (sem par na fatura). “Faltando” usa a mesma detecção da aba <strong>✚ Novos</strong>.</div>');
   if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa (por isso compras = ' + f(faturaTot) + ' e fatura declarada = ' + (d.declarado != null ? f(d.declarado) : '—') + ').</div>');
 
   function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
