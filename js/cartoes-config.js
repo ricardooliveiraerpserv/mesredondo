@@ -121,7 +121,8 @@ function renderCartoesTab() {
     if (!isCartaoLanc(l)) return false;
     if (l._espelhoDe) return false;
     if (l.categoria === 'Entrada Terceiro') return false;
-    return _inRange(l);
+    // A fatura do cartão é definida pelo VENCIMENTO, não pela competência (mes/ano).
+    return (typeof _inRangeVenc === 'function') ? _inRangeVenc(l) : _inRange(l);
   });
 
   // ── Populate pagarFaturaSelect ──
@@ -489,8 +490,8 @@ function _updatePagarFaturaInfo() {
   const all = loadDataBanco();
   const pendentes = all.filter(l =>
     normStr(l.pagamento) === normStr(nome) &&
-    Number(l.mes) === currentMonth &&
-    Number(l.ano) === currentYear &&
+    _vencMesAno(l).mes === currentMonth &&
+    _vencMesAno(l).ano === currentYear &&
     l.tipo === 'despesa' &&
     l.status === 'pendente'
   );
@@ -513,8 +514,8 @@ async function estornarFaturaCartaoSelecionado() {
   const all = loadData();
   const pagos = all.filter(l =>
     normStr(l.pagamento) === normStr(nomeCartao) &&
-    Number(l.mes) === currentMonth &&
-    Number(l.ano) === currentYear &&
+    _vencMesAno(l).mes === currentMonth &&
+    _vencMesAno(l).ano === currentYear &&
     l.tipo === 'despesa' &&
     l.status === 'pago'
   );
@@ -529,8 +530,8 @@ async function estornarFaturaCartaoSelecionado() {
 
   const upd = loadData().map(l =>
     normStr(l.pagamento) === normStr(nomeCartao) &&
-    Number(l.mes) === currentMonth &&
-    Number(l.ano) === currentYear &&
+    _vencMesAno(l).mes === currentMonth &&
+    _vencMesAno(l).ano === currentYear &&
     l.tipo === 'despesa' &&
     l.status === 'pago'
       ? { ...l, status: 'pendente' }
@@ -562,8 +563,8 @@ async function pagarFaturaCartao(nomeCartao) {
   const upd  = all.map(l => {
     if (
       normStr(l.pagamento) === nNome &&
-      Number(l.mes) === currentMonth &&
-      Number(l.ano) === currentYear &&
+      _vencMesAno(l).mes === currentMonth &&
+      _vencMesAno(l).ano === currentYear &&
       l.tipo === 'despesa' &&
       l.status === 'pendente'
     ) {
@@ -576,7 +577,7 @@ async function pagarFaturaCartao(nomeCartao) {
   if (count === 0) { alert('Nenhum lançamento pendente encontrado para este cartão neste mês.'); return; }
   _memCache.lancamentos = upd;
   // Atualiza cada lançamento alterado no Supabase
-  upd.filter(l => normStr(l.pagamento) === nNome && Number(l.mes) === currentMonth && Number(l.ano) === currentYear && l.tipo === 'despesa' && l.status === 'pago')
+  upd.filter(l => normStr(l.pagamento) === nNome && _vencMesAno(l).mes === currentMonth && _vencMesAno(l).ano === currentYear && l.tipo === 'despesa' && l.status === 'pago')
     .forEach(l => dbUpdateLancamento(l.id, { status: 'pago' }).catch(e => console.error('[pagarFatura]', e.message)));
   renderAll();
   renderCartoesTab();

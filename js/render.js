@@ -111,6 +111,31 @@ function _inRange(l) {
   const v = ano*100+mes, de = rng.de.ano*100+rng.de.mes, ate = rng.ate.ano*100+rng.ate.mes;
   return v >= de && v <= ate;
 }
+// Igual ao _inRange, mas pelo VENCIMENTO (qual fatura o lançamento pertence).
+// Usado nos CARTÕES — a fatura é definida pelo vencimento, não pela competência.
+function _inRangeVenc(l) {
+  const rng = window._rangeFilter || { de: { mes: currentMonth, ano: currentYear }, ate: { mes: currentMonth, ano: currentYear } };
+  let mes, ano;
+  const vc = String(l.vencimento || '');
+  let m1 = vc.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  let m2 = vc.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m1) { mes = parseInt(m1[2]); ano = parseInt(m1[3]); }
+  else if (m2) { mes = parseInt(m2[2]); ano = parseInt(m2[1]); }
+  else { mes = Number(l.mes); ano = Number(l.ano); if ((!mes || !ano) && l.data) { const p = String(l.data).split('-'); ano = parseInt(p[0]); mes = parseInt(p[1]); } }
+  if (!mes || !ano) return false;
+  const v = ano*100+mes, de = rng.de.ano*100+rng.de.mes, ate = rng.ate.ano*100+rng.ate.mes;
+  return v >= de && v <= ate;
+}
+// Mês/ano de um lançamento PELO VENCIMENTO (fallback p/ mes/ano). Usado p/ agrupar
+// fatura de cartão por vencimento (pagar/estornar/somar).
+function _vencMesAno(l) {
+  const vc = String(l && l.vencimento || '');
+  let m1 = vc.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  let m2 = vc.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m1) return { mes: parseInt(m1[2]), ano: parseInt(m1[3]) };
+  if (m2) return { mes: parseInt(m2[2]), ano: parseInt(m2[1]) };
+  return { mes: Number(l && l.mes), ano: Number(l && l.ano) };
+}
 // ── Filtro de banco centralizado ──
 // Retorna todos os lançamentos já filtrados pelo contexto de banco ativo
 function _applyBancoFilter(items) {
@@ -5066,13 +5091,19 @@ function _platTotalItau() {
   else if (window._itauVencimentoBr && /^\d{2}\/\d{2}\/\d{4}$/.test(window._itauVencimentoBr)) { var q = window._itauVencimentoBr.split('/'); m = parseInt(q[1]); a = parseInt(q[2]); }
   var all = (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) ? _memCache.lancamentos : [];
   var np = function(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
+  var per = function(l) {
+    var vc = l.vencimento || '';
+    var x = String(vc).match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (x) return { m: parseInt(x[2]), a: parseInt(x[3]) };
+    var y = String(vc).match(/^(\d{4})-(\d{2})-(\d{2})/);   if (y) return { m: parseInt(y[2]), a: parseInt(y[1]) };
+    return { m: Number(l.mes), a: Number(l.ano) };
+  };
   var tot = 0, n = 0;
   all.forEach(function(l) {
     if (np(l.pagamento).indexOf('black ita') === -1) return;
     if (l.tipo && l.tipo !== 'despesa') return;
     if (l._espelhoDe) return;
     if (l.categoria === 'Entrada Terceiro') return;
-    if (m && (Number(l.mes) !== m || Number(l.ano) !== a)) return;
+    if (m) { var pr = per(l); if (pr.m !== m || pr.a !== a) return; }
     tot += parseFloat(l.valor) || 0; n++;
   });
   return { tot: Math.abs(tot), n: n, m: m, a: a };
@@ -5217,18 +5248,26 @@ function conferirFaturaPlataforma() {
   else if (window._itauVencimentoBr && /^\d{2}\/\d{2}\/\d{4}$/.test(window._itauVencimentoBr)) { var q = window._itauVencimentoBr.split('/'); alvoMes = parseInt(q[1]); alvoAno = parseInt(q[2]); }
   if (alvoMes) alvoLabel = String(alvoMes).padStart(2, '0') + '/' + alvoAno;
 
-  // Lançamentos da plataforma — usa o MESMO critério do card do cartão (cartoes-config.js):
-  // pagamento Black Itaú, tipo despesa, agrupado por l.mes/l.ano (mês da fatura, NÃO o
-  // vencimento), excluindo espelhos e categoria "Entrada Terceiro" (não são gasto real).
+  // Lançamentos da plataforma — SEMPRE pelo VENCIMENTO da fatura (o que importa é a
+  // que fatura o lançamento pertence, não o mês de competência): pagamento Black Itaú,
+  // tipo despesa, vencimento no mês/ano alvo, excluindo espelhos e "Entrada Terceiro".
   var all = (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) ? _memCache.lancamentos : [];
   var npg = function(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
+  // Período (mês/ano) de um lançamento PELO VENCIMENTO (fallback p/ mes/ano se sem venc)
+  var _periodo = function(l) {
+    var vc = l.vencimento || '';
+    var m1 = String(vc).match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m1) return { m: parseInt(m1[2]), a: parseInt(m1[3]) };
+    var m2 = String(vc).match(/^(\d{4})-(\d{2})-(\d{2})/);   if (m2) return { m: parseInt(m2[2]), a: parseInt(m2[1]) };
+    return { m: Number(l.mes), a: Number(l.ano) };
+  };
   var plat = all.filter(function(l) {
     if (npg(l.pagamento).indexOf('black ita') === -1) return false;
     if (l.tipo && l.tipo !== 'despesa') return false;
     if (l._espelhoDe) return false;
     if (l.categoria === 'Entrada Terceiro') return false;
     if (!alvoMes) return true;
-    return Number(l.mes) === alvoMes && Number(l.ano) === alvoAno;
+    var pr = _periodo(l);
+    return pr.m === alvoMes && pr.a === alvoAno;
   });
 
   // Consistência TOTAL com a aba "Novos/Duplicados": usa o MESMO resultado do dedup
@@ -5240,8 +5279,20 @@ function conferirFaturaPlataforma() {
   importParsedRows.forEach(function(r) { (r._matchIds || []).forEach(function(id) { matchedIds[id] = true; }); });
   var soPlat = plat.filter(function(l) { return !matchedIds[String(l.id)]; }); // Black Itaú deste venc sem par na fatura
 
+  // Compras da fatura cujo lançamento na plataforma está em OUTRO mês (não no card-alvo).
+  // É a causa de o card ficar menor que a fatura mesmo com "faltando 0".
+  var emOutro = [];
+  importParsedRows.forEach(function(r) {
+    var m = r._existingMatch;
+    if (!m || !alvoMes) return;
+    var pr = _periodo(m);
+    if (pr.m !== alvoMes || pr.a !== alvoAno) emOutro.push({ r: r, m: m, pr: pr });
+  });
+
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
+  var emOutroTot = emOutro.reduce(function(s, x) { return s + x.r.value; }, 0);
+  var noCardTot = faturaTot - faltandoTot - emOutroTot; // compras que estão DE FATO no card-alvo
   var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0); // total REAL na plataforma (= card)
   var platAbs = Math.abs(platTot);
   var soPlatTot = soPlat.reduce(function(s, l) { return s + Math.abs(parseFloat(l.valor) || 0); }, 0);
@@ -5250,15 +5301,19 @@ function conferirFaturaPlataforma() {
   var H = [];
   H.push('<div style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">');
   H.push('<span>Compras na fatura: <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
+  H.push('<span>No card de ' + (alvoLabel || '—') + ': <strong style="color:var(--green)">' + f(noCardTot) + '</strong></span>');
+  H.push('<span>Lançado em OUTRO mês: <strong style="color:#fb923c">' + f(emOutroTot) + '</strong> (' + emOutro.length + ')</span>');
   H.push('<span>Faltando lançar: <strong style="color:' + (faltando.length ? '#ef4444' : 'var(--green)') + '">' + f(faltandoTot) + '</strong> (' + faltando.length + ')</span>');
-  H.push('<span>Extras na plataforma (fora desta fatura): <strong style="color:var(--accent)">' + f(soPlatTot) + '</strong> (' + soPlat.length + ')</span>');
   H.push('</div>');
   if (!faltando.length) {
-    H.push('<div style="font-weight:700;color:var(--green);margin-bottom:6px">✅ Fatura completa: todas as ' + importParsedRows.length + ' compras já estão lançadas. Nada a importar.</div>');
+    H.push('<div style="font-weight:700;color:var(--green);margin-bottom:6px">✅ Fatura completa: todas as ' + importParsedRows.length + ' compras já estão lançadas (nada a importar).</div>');
   }
-  if (soPlat.length) {
-    H.push('<div style="color:var(--muted);font-size:0.78rem;margin-bottom:8px">Os <strong>' + soPlat.length + ' extras</strong> abaixo estão na plataforma (Black Itaú venc ' + (alvoLabel || '—') + ', total do card ' + f(platAbs) + ') mas NÃO correspondem a nenhuma linha desta fatura. Normalmente são lançamentos de <strong>outros meses</strong>, <strong>antigos/duplicados</strong> (formato diferente: vírgulas, ids na descrição) ou lançamentos manuais — revise e exclua se forem indevidos.</div>');
-  }
+  // Reconciliação do card (fecha a conta): card = compras no mês + extras
+  H.push('<div style="color:var(--text2);font-size:0.78rem;margin-bottom:8px;padding:8px 12px;background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.25);border-radius:8px">'
+    + '<strong>Por que o card (' + f(platAbs) + ') é menor que a fatura (' + f(faturaTot) + '):</strong><br>'
+    + '• R$ ' + f(emOutroTot) + ' das suas compras (' + emOutro.length + ' lançamentos) estão na plataforma, mas em <strong>OUTRO mês</strong> (não entram no card de ' + (alvoLabel || '—') + ') — lista abaixo.<br>'
+    + '• O card ainda tem R$ ' + f(soPlatTot) + ' de <strong>extras</strong> (' + soPlat.length + ') que não são desta fatura.<br>'
+    + 'Conta: card ' + f(platAbs) + ' = compras no mês ' + f(noCardTot) + ' + extras ' + f(soPlatTot) + '.</div>');
   if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa.</div>');
 
   function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
@@ -5274,10 +5329,11 @@ function conferirFaturaPlataforma() {
     return s;
   }
 
-  if (!faltando.length && !soPlat.length) {
-    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão na plataforma e não há lançamentos a mais.</div>');
+  if (!faltando.length && !soPlat.length && !emOutro.length) {
+    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão na plataforma neste mês e não há lançamentos a mais.</div>');
   } else {
-    H.push(tabela('🔴 Na fatura, FALTANDO na plataforma', '#ef4444', faltando, function(r){return r.date;}, function(r){return r.desc;}, function(r){return r.value;}, faltandoTot));
+    if (faltando.length) H.push(tabela('🔴 Na fatura, FALTANDO na plataforma', '#ef4444', faltando, function(r){return r.date;}, function(r){return r.desc;}, function(r){return r.value;}, faltandoTot));
+    if (emOutro.length) H.push(tabela('🟠 Na fatura, mas com VENCIMENTO em outro mês (não entra no card de ' + (alvoLabel || '—') + ')', '#fb923c', emOutro, function(x){return x.r.date + ' → venc ' + (x.pr.m ? String(x.pr.m).padStart(2,'0') + '/' + x.pr.a : '?');}, function(x){return x.r.desc;}, function(x){return x.r.value;}, emOutroTot));
     H.push(tabela('🟡 Na plataforma, SEM corresponder na fatura', 'var(--accent)', soPlat, function(l){return l.data || l.vencimento;}, function(l){return l.desc;}, function(l){return l.valor;}, soPlatTot));
   }
   if (!temDedup) H.push('<div style="color:#ef4444;font-size:0.74rem;margin-top:8px">⚠️ Detecção de duplicados ainda não rodou — feche e reabra o preview da fatura antes de conferir.</div>');
