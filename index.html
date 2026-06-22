@@ -2130,7 +2130,13 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       <button onclick="closeSplit()" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;cursor:pointer">✕</button>
     </div>
     <div id="splitInfo" style="font-size:0.82rem;color:var(--text2);margin-bottom:12px"></div>
-    <label style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Valor do terceiro (R$)</label>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <label id="splitValorLabel" style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Valor do terceiro (R$)</label>
+      <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+        <button type="button" id="splitModeValor" onclick="_splitSetMode('valor')" style="background:var(--accent2);color:#000;border:none;padding:3px 12px;font-size:0.78rem;font-weight:700;cursor:pointer">R$</button>
+        <button type="button" id="splitModePct" onclick="_splitSetMode('pct')" style="background:transparent;color:var(--text2);border:none;border-left:1px solid var(--border);padding:3px 12px;font-size:0.78rem;font-weight:700;cursor:pointer">%</button>
+      </div>
+    </div>
     <input type="number" id="splitValor" step="0.01" min="0" oninput="_splitUpdateInfo()" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;margin:4px 0 12px;font-size:0.95rem">
     <label style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Terceiro</label>
     <select id="splitTerceiro" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;margin:4px 0 12px;font-size:0.9rem"></select>
@@ -2967,7 +2973,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606230700"></script>
+<script src="js/render.js?v=202606230900"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

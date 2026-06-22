@@ -5085,9 +5085,29 @@ function closeReconcile() {
 // Modelo padrão do app: a parte do terceiro vira despesa "Dividas de terceiros"
 // (no cartão) + espelho "Entrada Terceiro" (conta a receber, pendente).
 var _splitIdx = -1;
+var _splitMode = 'valor'; // 'valor' | 'pct'
 function _splitBadgeHtml(r) {
   if (!r || !r._split || !(r._split.value > 0)) return '';
-  return '<div style="font-size:0.66rem;color:var(--accent);margin-top:3px;white-space:nowrap;font-weight:700">✂️ ' + fmtBR(r._split.value) + ' → ' + (r._split.terceiro || '?') + '</div>';
+  var pctTxt = r._split.pct ? ' (' + r._split.pct + '%)' : '';
+  return '<div style="font-size:0.66rem;color:var(--accent);margin-top:3px;white-space:nowrap;font-weight:700">✂️ ' + fmtBR(r._split.value) + pctTxt + ' → ' + (r._split.terceiro || '?') + '</div>';
+}
+// Valor do terceiro a partir do input, conforme o modo (R$ direto ou % do total).
+function _splitTercVal() {
+  var r = importParsedRows[_splitIdx]; if (!r) return 0;
+  var raw = parseFloat(document.getElementById('splitValor').value) || 0;
+  if (_splitMode === 'pct') return Math.round(r.value * raw) / 100;
+  return Math.round(raw * 100) / 100;
+}
+function _splitSetMode(m) {
+  _splitMode = m;
+  var bV = document.getElementById('splitModeValor'), bP = document.getElementById('splitModePct');
+  var lbl = document.getElementById('splitValorLabel'), inp = document.getElementById('splitValor');
+  var on = 'background:var(--accent2);color:#000;', off = 'background:transparent;color:var(--text2);';
+  if (bV) bV.style.cssText = 'border:none;padding:3px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;' + (m === 'valor' ? on : off);
+  if (bP) bP.style.cssText = 'border:none;border-left:1px solid var(--border);padding:3px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;' + (m === 'pct' ? on : off);
+  if (m === 'pct') { lbl.textContent = 'Percentual do terceiro (%)'; inp.setAttribute('max', '100'); inp.placeholder = 'ex: 50'; }
+  else { lbl.textContent = 'Valor do terceiro (R$)'; inp.removeAttribute('max'); inp.placeholder = ''; }
+  _splitUpdateInfo();
 }
 function openSplit(idx) {
   _splitIdx = idx;
@@ -5097,7 +5117,13 @@ function openSplit(idx) {
   var sel = document.getElementById('splitTerceiro');
   var tercs = (typeof loadTerceiros === 'function') ? (loadTerceiros() || []) : [];
   sel.innerHTML = '<option value="">— selecione —</option>' + tercs.slice().sort(function(a, b) { return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); }).map(function(t) { return '<option value="' + (t.nome || '').replace(/"/g, '&quot;') + '">' + (t.nome || '') + '</option>'; }).join('');
-  document.getElementById('splitValor').value = (r._split && r._split.value) ? r._split.value : '';
+  if (r._split && r._split.pct) {
+    document.getElementById('splitValor').value = r._split.pct;
+    _splitSetMode('pct');
+  } else {
+    document.getElementById('splitValor').value = (r._split && r._split.value) ? r._split.value : '';
+    _splitSetMode('valor');
+  }
   if (r._split && r._split.terceiro) sel.value = r._split.terceiro;
   document.getElementById('splitRemoveBtn').style.display = r._split ? '' : 'none';
   _splitUpdateInfo();
@@ -5105,20 +5131,22 @@ function openSplit(idx) {
 }
 function _splitUpdateInfo() {
   var r = importParsedRows[_splitIdx]; if (!r) return;
-  var tval = parseFloat(document.getElementById('splitValor').value) || 0;
+  var tval = _splitTercVal();
+  var pctTxt = (_splitMode === 'pct') ? ' (' + (parseFloat(document.getElementById('splitValor').value) || 0) + '%)' : '';
   var pv = document.getElementById('splitPreview');
-  if (tval <= 0) { pv.innerHTML = '<span style="color:var(--muted)">Informe quanto desse lançamento é do terceiro.</span>'; return; }
-  if (tval >= r.value) { pv.innerHTML = '<span style="color:#ef4444">O valor do terceiro deve ser menor que ' + fmtBR(r.value) + '.</span>'; return; }
+  if (tval <= 0) { pv.innerHTML = '<span style="color:var(--muted)">Informe quanto desse lançamento é do terceiro (' + (_splitMode === 'pct' ? '%' : 'R$') + ').</span>'; return; }
+  if (tval >= r.value) { pv.innerHTML = '<span style="color:#ef4444">A parte do terceiro deve ser menor que ' + fmtBR(r.value) + '.</span>'; return; }
   var me = Math.round((r.value - tval) * 100) / 100;
-  pv.innerHTML = 'Sua parte (despesa): <strong>' + fmtBR(me) + '</strong><br>Parte do terceiro (Dívida de terceiros → a receber): <strong style="color:var(--accent)">' + fmtBR(tval) + '</strong>';
+  pv.innerHTML = 'Sua parte (despesa): <strong>' + fmtBR(me) + '</strong><br>Parte do terceiro (Dívida de terceiros → a receber): <strong style="color:var(--accent)">' + fmtBR(tval) + pctTxt + '</strong>';
 }
 function confirmSplit() {
   var r = importParsedRows[_splitIdx]; if (!r) return;
-  var tval = parseFloat(document.getElementById('splitValor').value) || 0;
+  var tval = _splitTercVal();
   var terc = document.getElementById('splitTerceiro').value;
-  if (tval <= 0 || tval >= r.value) { alert('Informe um valor do terceiro entre 0,01 e ' + fmtBR(r.value) + '.'); return; }
+  if (tval <= 0 || tval >= r.value) { alert('A parte do terceiro deve ficar entre 0,01 e ' + fmtBR(r.value) + '.'); return; }
   if (!terc) { alert('Selecione o terceiro.'); return; }
-  r._split = { value: Math.round(tval * 100) / 100, terceiro: terc };
+  var pct = (_splitMode === 'pct') ? (parseFloat(document.getElementById('splitValor').value) || 0) : null;
+  r._split = { value: tval, terceiro: terc, pct: pct };
   var b = document.getElementById('split-badge-' + _splitIdx); if (b) b.innerHTML = _splitBadgeHtml(r);
   closeSplit();
 }
