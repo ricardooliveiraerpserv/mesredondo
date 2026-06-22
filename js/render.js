@@ -4621,7 +4621,7 @@ function renderImportPreview(rows) {
     for (var mask = 1; mask < (1 << n); mask++) {
       var s = 0, bits = 0, picks = [];
       for (var j = 0; j < n; j++) if (mask & (1 << j)) { s += arr[j].c; bits++; picks.push(arr[j].l); }
-      if (bits >= 2 && s === vCents) { picks.forEach(_use); return picks[0]; }
+      if (bits >= 2 && s === vCents) { picks.forEach(_use); return picks; }
     }
     return null;
   };
@@ -4654,15 +4654,16 @@ function renderImportPreview(rows) {
     return null;
   };
 
+  var _ids = function(arr) { return arr.map(function(l) { return String(l.id); }).filter(function(x) { return x !== 'undefined'; }); };
   // Passe fixo (NÃO consome — fixo recorrente casa todo mês)
-  rows.forEach(function(r) { var k = _keys(r); var fx = _byFixed[k.base]; r._existingMatch = (fx && fx.length) ? fx[0] : undefined; });
+  rows.forEach(function(r) { var k = _keys(r); var fx = _byFixed[k.base]; if (fx && fx.length) { r._existingMatch = fx[0]; r._matchIds = _ids([fx[0]]); } else { r._existingMatch = undefined; } });
   // Passes 1..7 consumindo, exato → frouxo (tier across all rows antes do próximo)
   for (var _tier = 1; _tier <= 7; _tier++) {
-    rows.forEach(function(r) { if (r._existingMatch) return; var m = _take(_tierArr(r, _tier)); if (m) r._existingMatch = m; });
+    rows.forEach(function(r) { if (r._existingMatch) return; var m = _take(_tierArr(r, _tier)); if (m) { r._existingMatch = m; r._matchIds = _ids([m]); } });
   }
-  // Camada final: split por soma das partes
-  rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var m = _splitSumMatch(k.t, k.v, k.pt, k.dt); if (m) r._existingMatch = m; });
-  rows.forEach(function(r) { if (!r._existingMatch) r._existingMatch = null; });
+  // Camada final: split por soma das partes (consome e registra TODAS as partes)
+  rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var picks = _splitSumMatch(k.t, k.v, k.pt, k.dt); if (picks) { r._existingMatch = picks[0]; r._matchIds = _ids(picks); } });
+  rows.forEach(function(r) { if (!r._existingMatch) { r._existingMatch = null; r._matchIds = []; } });
 
   var _dups    = rows.filter(function(r) { return r._existingMatch; });
   var _nonDups = rows.filter(function(r) { return !r._existingMatch; });
@@ -5236,25 +5237,29 @@ function conferirFaturaPlataforma() {
   var temDedup = importParsedRows.some(function(r) { return r.hasOwnProperty('_existingMatch'); });
   var faltando = importParsedRows.filter(function(r) { return !r._existingMatch; }); // = "Novos"
   var matchedIds = {};
-  importParsedRows.forEach(function(r) { if (r._existingMatch && r._existingMatch.id != null) matchedIds[String(r._existingMatch.id)] = true; });
+  importParsedRows.forEach(function(r) { (r._matchIds || []).forEach(function(id) { matchedIds[id] = true; }); });
   var soPlat = plat.filter(function(l) { return !matchedIds[String(l.id)]; }); // Black Itaú deste venc sem par na fatura
 
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
-  var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0); // total REAL na plataforma (deve bater com o card)
+  var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0); // total REAL na plataforma (= card)
   var platAbs = Math.abs(platTot);
   var soPlatTot = soPlat.reduce(function(s, l) { return s + Math.abs(parseFloat(l.valor) || 0); }, 0);
-  var difer = faturaTot - platAbs;
   var d = window._itauDiag || {};
 
   var H = [];
   H.push('<div style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">');
-  H.push('<span>Fatura (compras): <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
-  H.push('<span>Na plataforma (Black Itaú' + (alvoLabel ? ' venc ' + alvoLabel : '') + '): <strong>' + f(platAbs) + '</strong> (' + plat.length + ')</span>');
-  H.push('<span>Diferença: <strong style="color:' + (Math.abs(difer) < 0.005 ? 'var(--green)' : '#ef4444') + '">' + (difer >= 0 ? '+' : '-') + f(Math.abs(difer)) + '</strong></span>');
+  H.push('<span>Compras na fatura: <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
+  H.push('<span>Faltando lançar: <strong style="color:' + (faltando.length ? '#ef4444' : 'var(--green)') + '">' + f(faltandoTot) + '</strong> (' + faltando.length + ')</span>');
+  H.push('<span>Extras na plataforma (fora desta fatura): <strong style="color:var(--accent)">' + f(soPlatTot) + '</strong> (' + soPlat.length + ')</span>');
   H.push('</div>');
-  H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:8px">“Na plataforma” soma os lançamentos Black Itaú venc ' + (alvoLabel || '—') + ' (deve bater com o card do cartão). A diferença vem das duas listas: o que falta lançar (fatura sem par) menos o que está a mais na plataforma (sem par na fatura). “Faltando” usa a mesma detecção da aba <strong>✚ Novos</strong>.</div>');
-  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa (por isso compras = ' + f(faturaTot) + ' e fatura declarada = ' + (d.declarado != null ? f(d.declarado) : '—') + ').</div>');
+  if (!faltando.length) {
+    H.push('<div style="font-weight:700;color:var(--green);margin-bottom:6px">✅ Fatura completa: todas as ' + importParsedRows.length + ' compras já estão lançadas. Nada a importar.</div>');
+  }
+  if (soPlat.length) {
+    H.push('<div style="color:var(--muted);font-size:0.78rem;margin-bottom:8px">Os <strong>' + soPlat.length + ' extras</strong> abaixo estão na plataforma (Black Itaú venc ' + (alvoLabel || '—') + ', total do card ' + f(platAbs) + ') mas NÃO correspondem a nenhuma linha desta fatura. Normalmente são lançamentos de <strong>outros meses</strong>, <strong>antigos/duplicados</strong> (formato diferente: vírgulas, ids na descrição) ou lançamentos manuais — revise e exclua se forem indevidos.</div>');
+  }
+  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa.</div>');
 
   function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
     var s = '<div style="margin-bottom:14px">';
