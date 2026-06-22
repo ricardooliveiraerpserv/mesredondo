@@ -2208,6 +2208,8 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
           <strong id="importTotFuturos" style="color:var(--accent)">0 lançamentos</strong>
         </span>
       </div>
+      <!-- Diagnóstico da fatura Itaú (conferência total declarado × compras × selecionados) -->
+      <div id="importDiagPanel" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:8px;font-size:0.8rem;line-height:1.5"></div>
       <!-- Barra de filtros do preview -->
       <div id="importFilterBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;align-items:flex-end;">
         <span style="font-size:0.7rem;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;padding-bottom:6px">Filtrar:</span>
@@ -2930,7 +2932,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606221600"></script>
+<script src="js/render.js?v=202606221800"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

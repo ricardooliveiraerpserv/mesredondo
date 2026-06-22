@@ -3246,7 +3246,7 @@ function handleImportDrop(e) {
 
 function handleImportFile(file) {
   if (!file) return;
-  if (typeof window !== 'undefined') window._itauVencimentoBr = '';
+  if (typeof window !== 'undefined') { window._itauVencimentoBr = ''; window._itauDiag = null; }
   var reader = new FileReader();
   // XLSX = ZIP (magic bytes PK), XLS = OLE2 (magic D0 CF)
   reader.onload = function(e) {
@@ -3579,6 +3579,8 @@ function processXLSXData(sstXml, wsXml) {
   // (há metadados de nome/agência/conta/total acima) e a coluna de descrição é "Lançamento".
   var itauRaw = false;
   var itauVencBr = ''; // vencimento da fatura (DD/MM/YYYY), extraído do topo do arquivo
+  var itauFaturaTotal = null; // total declarado da fatura (topo do arquivo)
+  var itauEstornoSum = 0, itauEstornoN = 0; // estornos/créditos (negativos) não importados
   var _forceItau = (typeof window !== 'undefined' && window._importMode === 'itau');
   (function detectItau() {
     var normH = function(x) { return String(x == null ? '' : x).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
@@ -3604,27 +3606,35 @@ function processXLSXData(sstXml, wsXml) {
       }
     }
     if (!itauRaw) return;
-    // Vencimento da fatura: label "Vencimento" no bloco de metadados (acima do header)
-    // + serial/data na MESMA coluna na(s) linha(s) abaixo do label.
-    var vCol = -1, vRow = -1;
-    for (var pj = 0; pj < parsedRows.length; pj++) {
-      var pr2 = parsedRows[pj];
-      if (pr2.r >= headerRowIdx) break;
-      var ks = Object.keys(pr2.cells);
-      for (var ki = 0; ki < ks.length; ki++) {
-        if (normH(pr2.cells[ks[ki]]) === 'vencimento') { vCol = parseInt(ks[ki]); vRow = pr2.r; break; }
+    // Lê um valor de metadado do topo: acha o label (ex: "Vencimento", "Valor")
+    // ACIMA do header e pega a célula na MESMA coluna, na linha logo abaixo do label.
+    function metaValue(label) {
+      var col = -1, row = -1;
+      for (var pj = 0; pj < parsedRows.length; pj++) {
+        var pr2 = parsedRows[pj];
+        if (pr2.r >= headerRowIdx) break;
+        var ks = Object.keys(pr2.cells);
+        for (var ki = 0; ki < ks.length; ki++) {
+          if (normH(pr2.cells[ks[ki]]) === label) { col = parseInt(ks[ki]); row = pr2.r; break; }
+        }
+        if (col >= 0) break;
       }
-      if (vCol >= 0) break;
-    }
-    if (vCol >= 0) {
+      if (col < 0) return null;
       for (var pk = 0; pk < parsedRows.length; pk++) {
         var pr3 = parsedRows[pk];
-        if (pr3.r <= vRow || pr3.r >= headerRowIdx) continue;
-        var v = pr3.cells[vCol];
-        if (typeof v === 'number') { itauVencBr = excelDate(v); break; }
-        if (typeof v === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(v.trim())) { itauVencBr = v.trim(); break; }
+        if (pr3.r <= row || pr3.r >= headerRowIdx) continue;
+        if (pr3.cells[col] !== undefined && pr3.cells[col] !== '') return pr3.cells[col];
       }
+      return null;
     }
+    // Vencimento da fatura (serial Excel ou string DD/MM/YYYY)
+    var vv = metaValue('vencimento');
+    if (typeof vv === 'number') itauVencBr = excelDate(vv);
+    else if (typeof vv === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(vv.trim())) itauVencBr = vv.trim();
+    // Total declarado da fatura (label "Valor" no bloco de metadados, acima do header)
+    var tv = metaValue('valor');
+    if (typeof tv === 'number') itauFaturaTotal = Math.abs(tv);
+    else if (typeof tv === 'string') { var n = parseFloat(String(tv).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')); if (!isNaN(n)) itauFaturaTotal = Math.abs(n); }
   })();
   if (typeof window !== 'undefined') window._itauVencimentoBr = itauVencBr;
   if (_forceItau && !itauRaw) {
@@ -3749,8 +3759,9 @@ function processXLSXData(sstXml, wsXml) {
     var rawAmt = parseFloat(amtVal);
     if (itauRaw) {
       // Na fatura Itaú a COMPRA vem positiva (despesa). O pagamento da fatura anterior
-      // e estornos/créditos vêm negativos → ignorados na importação.
-      if (rawAmt < 0 || /pagamento efetuado/i.test(descVal)) return;
+      // e estornos/créditos vêm negativos → ignorados na importação (contabilizados p/ diagnóstico).
+      if (/pagamento efetuado/i.test(descVal)) return;
+      if (rawAmt < 0) { itauEstornoSum += -rawAmt; itauEstornoN++; return; }
       if (!pgtoVal) pgtoVal = 'Black Itau';
     }
     // Infer tipo from sign if not explicitly set in column
@@ -3777,6 +3788,16 @@ function processXLSXData(sstXml, wsXml) {
   if (!rows.length) { alert('Nenhum lançamento encontrado no arquivo.'); return; }
   rows.forEach(function(r, i) { r._origIdx = i; });
   importParsedRows = rows;
+  // Diagnóstico da fatura Itaú (conferência total declarado × compras × selecionados)
+  if (typeof window !== 'undefined') {
+    window._itauDiag = itauRaw ? {
+      declarado: itauFaturaTotal,
+      comprasSum: rows.reduce(function(s, r) { return s + (r.value || 0); }, 0),
+      comprasN: rows.length,
+      estornoSum: itauEstornoSum,
+      estornoN: itauEstornoN
+    } : null;
+  }
   // Renderiza preview diretamente (IA de categorização disponível via botão)
   renderImportPreview(rows);
   // Itaú: pré-carrega o campo "Vencimento em massa" com o vencimento da fatura,
@@ -4993,6 +5014,42 @@ function updateImportTotals() {
   sEl.textContent = (saldo >= 0 ? '+' : '-') + fmtBR(Math.abs(saldo));
   sEl.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('importTotFuturos').textContent = futuros > 0 ? '+' + futuros + ' futuros' : '—';
+  _renderItauDiag(totalDesp, qtd);
+}
+
+// Rotina de diagnóstico: confere o total declarado da fatura Itaú contra as compras
+// detectadas e o que está selecionado, apontando quanto/quantos faltam (valor abaixo).
+function _renderItauDiag(selSum, selCount) {
+  var el = document.getElementById('importDiagPanel');
+  if (!el) return;
+  var d = (typeof window !== 'undefined') ? window._itauDiag : null;
+  if (!d) { el.style.display = 'none'; return; }
+  var f = fmtBR;
+  var falta = d.comprasSum - selSum;     // parte das compras NÃO selecionada
+  var faltaN = d.comprasN - selCount;
+  var ok = Math.abs(falta) < 0.005;
+  var L = [];
+  L.push('<div style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:0.72rem;margin-bottom:6px;color:var(--text)">🔎 Conferência da fatura Itaú</div>');
+  L.push('<div style="display:flex;flex-wrap:wrap;gap:14px;color:var(--text2)">');
+  if (d.declarado != null) L.push('<span>Total declarado: <strong>' + f(d.declarado) + '</strong></span>');
+  L.push('<span>Compras na fatura: <strong>' + f(d.comprasSum) + '</strong> (' + d.comprasN + ')</span>');
+  if (d.estornoN > 0) L.push('<span>Estornos/créditos não importados: <strong>-' + f(d.estornoSum) + '</strong> (' + d.estornoN + ')</span>');
+  L.push('<span>Selecionado p/ importar: <strong>' + f(selSum) + '</strong> (' + selCount + ' de ' + d.comprasN + ')</span>');
+  L.push('</div>');
+  if (ok) {
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--green)">✅ Importação completa: todas as ' + d.comprasN + ' compras estão selecionadas.</div>');
+    if (d.declarado != null && d.estornoN > 0) L.push('<div style="margin-top:2px;color:var(--muted);font-size:0.74rem">A fatura declara ' + f(d.declarado) + ' = compras − ' + f(d.estornoSum) + ' de estornos/créditos (não lançados como despesa).</div>');
+    el.style.borderColor = 'rgba(74,240,160,0.4)'; el.style.background = 'rgba(74,240,160,0.07)';
+  } else if (falta > 0) {
+    L.push('<div style="margin-top:6px;font-weight:700;color:#ef4444">⚠️ ABAIXO DA FATURA: faltam ' + f(falta) + ' em ' + faltaN + ' lançamento(s) não selecionado(s).</div>');
+    L.push('<div style="margin-top:2px;color:var(--muted);font-size:0.74rem">Revise as abas “⚠️ Duplicados” e “❓ Não identificados” — desmarcados não entram na importação. Use “☑ Marcar todos” se forem válidos.</div>');
+    el.style.borderColor = 'rgba(239,68,68,0.45)'; el.style.background = 'rgba(239,68,68,0.08)';
+  } else {
+    L.push('<div style="margin-top:6px;font-weight:700;color:var(--accent)">⚠️ ACIMA das compras da fatura por ' + f(-falta) + ' — verifique lançamentos marcados a mais.</div>');
+    el.style.borderColor = 'rgba(240,192,64,0.45)'; el.style.background = 'rgba(240,192,64,0.08)';
+  }
+  el.innerHTML = L.join('');
+  el.style.display = 'block';
 }
 
 function confirmImport() {
