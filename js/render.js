@@ -5052,6 +5052,91 @@ function _renderItauDiag(selSum, selCount) {
   el.style.display = 'block';
 }
 
+function closeReconcile() {
+  var ov = document.getElementById('reconcileOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+// Conferência: cruza a fatura carregada (compras) com os lançamentos já na
+// plataforma (Black Itaú, mesmo mês de vencimento) e mostra a diferença dos 2 lados.
+function conferirFaturaPlataforma() {
+  if (!importParsedRows || !importParsedRows.length) { alert('Carregue a fatura primeiro (Importar Black Itaú).'); return; }
+  var f = fmtBR;
+  // Mês/ano alvo: do campo "Vencimento em massa" (ISO) ou do vencimento da fatura
+  var alvoMes = null, alvoAno = null, alvoLabel = '';
+  var bv = document.getElementById('bulkVencInput');
+  if (bv && bv.value && /^\d{4}-\d{2}-\d{2}$/.test(bv.value)) { var p = bv.value.split('-'); alvoAno = parseInt(p[0]); alvoMes = parseInt(p[1]); }
+  else if (window._itauVencimentoBr && /^\d{2}\/\d{2}\/\d{4}$/.test(window._itauVencimentoBr)) { var q = window._itauVencimentoBr.split('/'); alvoMes = parseInt(q[1]); alvoAno = parseInt(q[2]); }
+  if (alvoMes) alvoLabel = String(alvoMes).padStart(2, '0') + '/' + alvoAno;
+
+  // Lançamentos da plataforma: Black Itaú + vencimento no mês/ano alvo
+  var all = (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) ? _memCache.lancamentos : [];
+  var npg = function(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
+  var plat = all.filter(function(l) {
+    if (npg(l.pagamento).indexOf('black ita') === -1) return false;
+    if (!alvoMes) return true;
+    var vm = null, va = null;
+    if (l.vencimento && /^\d{2}\/\d{2}\/\d{4}$/.test(l.vencimento)) { var vp = l.vencimento.split('/'); vm = parseInt(vp[1]); va = parseInt(vp[2]); }
+    else { vm = l.mes; va = l.ano; }
+    return vm === alvoMes && va === alvoAno;
+  });
+
+  // Matching por descrição normalizada + valor absoluto (multiset)
+  var norm = function(s) { return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); };
+  var keyOf = function(desc, val) { return norm(desc) + '|' + Math.abs(parseFloat(val) || 0).toFixed(2); };
+  var platMap = {};
+  plat.forEach(function(l) { var k = keyOf(l.desc, l.valor); (platMap[k] = platMap[k] || []).push(l); });
+
+  var faltando = []; // na fatura, sem correspondência na plataforma
+  importParsedRows.forEach(function(r) {
+    var k = keyOf(r.desc, r.value);
+    if (platMap[k] && platMap[k].length) platMap[k].shift();
+    else faltando.push(r);
+  });
+  var soPlat = []; // na plataforma, sem correspondência na fatura
+  Object.keys(platMap).forEach(function(k) { platMap[k].forEach(function(l) { soPlat.push(l); }); });
+
+  var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
+  var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0);
+  var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
+  var soPlatTot = soPlat.reduce(function(s, l) { return s + Math.abs(parseFloat(l.valor) || 0); }, 0);
+  var d = window._itauDiag || {};
+
+  var H = [];
+  H.push('<div style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">');
+  H.push('<span>Fatura (compras): <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
+  H.push('<span>Plataforma Black Itaú' + (alvoLabel ? ' venc ' + alvoLabel : '') + ': <strong>' + f(platTot) + '</strong> (' + plat.length + ')</span>');
+  var difer = faturaTot - platTot;
+  H.push('<span>Diferença: <strong style="color:' + (Math.abs(difer) < 0.005 ? 'var(--green)' : '#ef4444') + '">' + (difer >= 0 ? '+' : '-') + f(Math.abs(difer)) + '</strong></span>');
+  H.push('</div>');
+  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa (por isso compras = ' + f(faturaTot) + ' e fatura declarada = ' + (d.declarado != null ? f(d.declarado) : '—') + ').</div>');
+
+  function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
+    var s = '<div style="margin-bottom:14px">';
+    s += '<div style="font-weight:700;color:' + cor + ';margin-bottom:6px">' + titulo + ' (' + itens.length + ') — ' + f(tot) + '</div>';
+    if (!itens.length) { s += '<div style="color:var(--muted);font-size:0.78rem">— nenhum —</div></div>'; return s; }
+    s += '<div style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.76rem">';
+    s += '<thead><tr style="position:sticky;top:0;background:var(--surface2)"><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:left;padding:5px 8px">Descrição</th><th style="text-align:right;padding:5px 8px">Valor</th></tr></thead><tbody>';
+    itens.forEach(function(it) {
+      s += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;white-space:nowrap;color:var(--text2)">' + (getData(it) || '') + '</td><td style="padding:4px 8px">' + (getDesc(it) || '') + '</td><td style="padding:4px 8px;text-align:right">' + f(Math.abs(getVal(it))) + '</td></tr>';
+    });
+    s += '</tbody></table></div></div>';
+    return s;
+  }
+
+  if (!faltando.length && !soPlat.length) {
+    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão na plataforma e não há lançamentos a mais.</div>');
+  } else {
+    H.push(tabela('🔴 Na fatura, FALTANDO na plataforma', '#ef4444', faltando, function(r){return r.date;}, function(r){return r.desc;}, function(r){return r.value;}, faltandoTot));
+    H.push(tabela('🟡 Na plataforma, SEM corresponder na fatura', 'var(--accent)', soPlat, function(l){return l.data || l.vencimento;}, function(l){return l.desc;}, function(l){return l.valor;}, soPlatTot));
+  }
+  if (!alvoMes) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-top:8px">⚠️ Sem mês de vencimento definido — comparei com TODOS os lançamentos Black Itaú. Defina o "Vencimento em massa" para filtrar por 06/2026.</div>');
+  if (!all.length) H.push('<div style="color:#ef4444;font-size:0.74rem;margin-top:8px">⚠️ Não encontrei lançamentos carregados em memória. Abra a tela de Lançamentos do mês antes de conferir.</div>');
+
+  document.getElementById('reconcileBody').innerHTML = H.join('');
+  document.getElementById('reconcileOverlay').style.display = 'flex';
+}
+
 function confirmImport() {
   // Usa a mesma lógica do updateImportTotals para garantir valores idênticos ao cabeçalho
   var defTipo = document.getElementById('importDefaultTipo') ? document.getElementById('importDefaultTipo').value || 'despesa' : 'despesa';
