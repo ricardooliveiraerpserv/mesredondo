@@ -5173,6 +5173,25 @@ function _toggleAllExtras(checked) {
   document.querySelectorAll('.reconcile-extra-chk').forEach(function(c) { c.checked = checked; });
 }
 
+// Move para "Black Itau" os lançamentos que casaram com a fatura mas estavam com
+// outro pagamento (por isso não entravam no card). Mantém categoria/terceiro/valor.
+async function _moverParaBlackItau() {
+  var ids = (window._reconcileFixPgtoIds || []).filter(function(x) { return x != null && x !== ''; });
+  if (!ids.length) { alert('Nenhum lançamento para mover.'); return; }
+  var msg = 'Mover ' + ids.length + ' lançamento(s) para o pagamento "Black Itau"?\n\nMantém categoria, terceiro, valor e vencimento — só corrige o pagamento, pra entrarem no card do cartão.';
+  var ok = (typeof _showSimpleConfirm === 'function') ? await _showSimpleConfirm('🏦 Mover p/ Black Itaú', msg, 'Mover ' + ids.length, 'var(--accent2)') : confirm(msg);
+  if (!ok) return;
+  var set = {}; ids.forEach(function(id) { set[String(id)] = true; });
+  if (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) {
+    _memCache.lancamentos = _memCache.lancamentos.map(function(l) { return (l.id != null && set[String(l.id)]) ? Object.assign({}, l, { pagamento: 'Black Itau' }) : l; });
+  }
+  ids.forEach(function(id) { if (typeof dbUpdateLancamento === 'function') dbUpdateLancamento(id, { pagamento: 'Black Itau' }).catch(function(e) { console.warn('[moverBlackItau]', e && e.message); }); });
+  if (typeof renderAll === 'function') { try { renderAll(); } catch (e) {} }
+  if (typeof renderCartoesTab === 'function') { try { renderCartoesTab(); } catch (e) {} }
+  alert('🏦 ' + ids.length + ' lançamento(s) movido(s) para Black Itaú. Reconferindo…');
+  conferirFaturaPlataforma();
+}
+
 // Exclui da plataforma os "extras" marcados (lançamentos do cartão sem par na fatura).
 async function _excluirExtrasItau() {
   var ids = [];
@@ -5328,20 +5347,32 @@ function conferirFaturaPlataforma() {
     if (pr.m !== alvoMes || pr.a !== alvoAno) emOutro.push({ r: r, m: m, pr: pr });
   });
 
-  // Diferença de valor: compra casou com lançamento existente, mas o VALOR lançado
-  // difere do da fatura (lançamento antigo com valor/desc diferente). Acionável.
+  // Resíduo REAL: a compra da fatura casou com um lançamento existente, mas esse
+  // lançamento NÃO está no card de junho (foi lançado com OUTRO pagamento — ex: Pix —,
+  // ou como Entrada Terceiro, ou venc/mês diferente). O dedup casa por valor mas ignora
+  // o pagamento, por isso "faltando 0" mas o card menor. Acionável: mover p/ Black Itaú.
   var _byId = {};
   all.forEach(function(l) { if (l.id != null) _byId[String(l.id)] = l; });
-  var difValor = [];
+  var platIdSet = {};
+  plat.forEach(function(l) { if (l.id != null) platIdSet[String(l.id)] = true; });
+  var foraDoCard = [];
   importParsedRows.forEach(function(r) {
-    if (!r._existingMatch) return;
-    var ids = (r._matchIds && r._matchIds.length) ? r._matchIds : (r._existingMatch.id != null ? [String(r._existingMatch.id)] : []);
-    var pv = 0, achou = false;
-    ids.forEach(function(id) { var l = _byId[id]; if (l) { pv += Math.abs(parseFloat(l.valor) || 0); achou = true; } });
-    if (!achou) pv = Math.abs(parseFloat(r._existingMatch.valor) || 0);
-    if (Math.abs(pv - r.value) > 0.01) difValor.push({ r: r, pv: pv, diff: r.value - pv });
+    var m = r._existingMatch;
+    if (!m) return;
+    var ids = (r._matchIds && r._matchIds.length) ? r._matchIds : (m.id != null ? [String(m.id)] : []);
+    var checados = ids.length ? ids.map(function(id) { return _byId[id]; }) : [m];
+    checados.forEach(function(l) {
+      if (!l || (l.id != null && platIdSet[String(l.id)])) return; // já está no card → ok
+      var ehBlack = npg(l.pagamento).indexOf('black ita') !== -1;
+      var motivo = !ehBlack ? 'pagamento: ' + (l.pagamento || '—')
+        : (l.categoria === 'Entrada Terceiro' ? 'Entrada Terceiro'
+        : (l._espelhoDe ? 'espelho' : 'venc/mês diferente'));
+      foraDoCard.push({ r: r, l: l, motivo: motivo, fixPgto: !ehBlack });
+    });
   });
-  var difValorTot = difValor.reduce(function(s, x) { return s + x.diff; }, 0);
+  var foraDoCardTot = foraDoCard.reduce(function(s, x) { return s + Math.abs(parseFloat(x.l.valor) || 0); }, 0);
+  var fixaveis = foraDoCard.filter(function(x) { return x.fixPgto && x.l.id != null; });
+  window._reconcileFixPgtoIds = fixaveis.map(function(x) { return String(x.l.id); });
 
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
@@ -5369,7 +5400,7 @@ function conferirFaturaPlataforma() {
   conta.push('• R$ ' + f(matchedPlatTot) + ' = compras DESTA fatura já lançadas neste mês.');
   if (soPlat.length) conta.push('• R$ ' + f(soPlatTot) + ' = <strong>extras</strong> (' + soPlat.length + ') que NÃO são desta fatura (lançamentos antigos/duplicados/manuais — lista abaixo).');
   if (emOutro.length) conta.push('• R$ ' + f(emOutroTot) + ' das compras estão lançadas com vencimento em OUTRO mês (lista abaixo).');
-  if (Math.abs(residual) > 0.01) conta.push('• R$ ' + f(Math.abs(residual)) + ' = diferença de valor: lançamentos antigos com valor/descrição diferente do da fatura (pareiam, mas o valor lançado difere).');
+  if (foraDoCard.length) conta.push('• R$ ' + f(foraDoCardTot) + ' = compras lançadas, mas FORA do card (pagamento diferente de Black Itaú, ou Entrada Terceiro) — lista abaixo, com botão pra corrigir.');
   H.push('<div style="color:var(--text2);font-size:0.78rem;margin-bottom:8px;padding:8px 12px;background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.25);border-radius:8px">' + conta.join('<br>') + '</div>');
   if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura declarada é ' + (d.declarado != null ? f(d.declarado) : '—') + ' = compras ' + f(faturaTot) + ' − ' + f(d.estornoSum) + ' de estornos/créditos (que não são lançados como despesa).</div>');
 
@@ -5386,17 +5417,21 @@ function conferirFaturaPlataforma() {
     return s;
   }
 
-  if (!faltando.length && !soPlat.length && !emOutro.length && !difValor.length) {
-    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão na plataforma neste mês, com o mesmo valor, e não há lançamentos a mais.</div>');
+  if (!faltando.length && !soPlat.length && !emOutro.length && !foraDoCard.length) {
+    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão no card de ' + (alvoLabel || '—') + ', e não há lançamentos a mais.</div>');
   } else {
-    if (difValor.length) {
+    if (foraDoCard.length) {
+      var fixN = (window._reconcileFixPgtoIds || []).length;
       var dv = '<div style="margin-bottom:14px">';
-      dv += '<div style="font-weight:700;color:#fbbf24;margin-bottom:6px">🟣 Casou, mas com VALOR diferente do da fatura (' + difValor.length + ') — diferença ' + f(Math.abs(difValorTot)) + '</div>';
-      dv += '<div style="color:var(--muted);font-size:0.72rem;margin-bottom:6px">São lançamentos antigos cujo valor não bate com a fatura. Corrija o valor deles na tela de Lançamentos (ou exclua e reimporte).</div>';
+      dv += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">';
+      dv += '<span style="font-weight:700;color:#fbbf24">🟣 Lançadas, mas FORA do card de Black Itaú (' + foraDoCard.length + ') — ' + f(foraDoCardTot) + '</span>';
+      if (fixN) dv += '<button onclick="_moverParaBlackItau()" style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.45);color:#60a5fa;border-radius:7px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer">🏦 Mover ' + fixN + ' p/ Black Itaú</button>';
+      dv += '</div>';
+      dv += '<div style="color:var(--muted);font-size:0.72rem;margin-bottom:6px">Estas compras existem, mas foram lançadas com <strong>pagamento diferente de Black Itaú</strong> (ou como Entrada Terceiro), por isso não entram no card. O botão move as de "outro pagamento" para Black Itaú (mantém categoria, terceiro e valor).</div>';
       dv += '<div style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.76rem">';
-      dv += '<thead><tr style="position:sticky;top:0;background:var(--surface2)"><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:left;padding:5px 8px">Descrição</th><th style="text-align:right;padding:5px 8px">Fatura</th><th style="text-align:right;padding:5px 8px">Lançado</th><th style="text-align:right;padding:5px 8px">Dif.</th></tr></thead><tbody>';
-      difValor.forEach(function(x) {
-        dv += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;white-space:nowrap;color:var(--text2)">' + (x.r.date || '') + '</td><td style="padding:4px 8px">' + (x.r.desc || '') + '</td><td style="padding:4px 8px;text-align:right">' + f(x.r.value) + '</td><td style="padding:4px 8px;text-align:right;color:var(--text2)">' + f(x.pv) + '</td><td style="padding:4px 8px;text-align:right;color:' + (x.diff >= 0 ? '#ef4444' : 'var(--green)') + '">' + (x.diff >= 0 ? '+' : '-') + f(Math.abs(x.diff)) + '</td></tr>';
+      dv += '<thead><tr style="position:sticky;top:0;background:var(--surface2)"><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:left;padding:5px 8px">Descrição</th><th style="text-align:left;padding:5px 8px">Motivo</th><th style="text-align:right;padding:5px 8px">Valor</th></tr></thead><tbody>';
+      foraDoCard.forEach(function(x) {
+        dv += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;white-space:nowrap;color:var(--text2)">' + (x.l.data || x.l.vencimento || x.r.date || '') + '</td><td style="padding:4px 8px">' + (x.l.desc || x.r.desc || '') + '</td><td style="padding:4px 8px;color:' + (x.fixPgto ? '#60a5fa' : 'var(--muted)') + '">' + x.motivo + '</td><td style="padding:4px 8px;text-align:right">' + f(Math.abs(parseFloat(x.l.valor) || 0)) + '</td></tr>';
       });
       dv += '</tbody></table></div></div>';
       H.push(dv);
