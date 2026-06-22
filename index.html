@@ -2122,6 +2122,29 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
   </div>
 </div>
 
+<!-- MODAL: DESMEMBRAR PARTE DO TERCEIRO -->
+<div id="splitOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10001;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)closeSplit()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;max-width:460px;width:100%;padding:20px 22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="margin:0;font-size:1rem">✂️ Desmembrar — parte do terceiro</h2>
+      <button onclick="closeSplit()" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;cursor:pointer">✕</button>
+    </div>
+    <div id="splitInfo" style="font-size:0.82rem;color:var(--text2);margin-bottom:12px"></div>
+    <label style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Valor do terceiro (R$)</label>
+    <input type="number" id="splitValor" step="0.01" min="0" oninput="_splitUpdateInfo()" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;margin:4px 0 12px;font-size:0.95rem">
+    <label style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Terceiro</label>
+    <select id="splitTerceiro" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 9px;margin:4px 0 12px;font-size:0.9rem"></select>
+    <div id="splitPreview" style="font-size:0.82rem;margin-bottom:16px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px"></div>
+    <div style="display:flex;justify-content:space-between;gap:8px">
+      <button onclick="removeSplit()" id="splitRemoveBtn" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);color:#ef4444;border-radius:7px;padding:6px 14px;font-size:0.8rem;cursor:pointer;font-weight:700">Remover divisão</button>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeSplit()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:7px;padding:6px 14px;font-size:0.8rem;cursor:pointer">Cancelar</button>
+        <button onclick="confirmSplit()" style="background:var(--accent2);border:none;color:#000;border-radius:7px;padding:6px 16px;font-size:0.8rem;cursor:pointer;font-weight:700">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: IMPORTAR FATURA CARTÃO -->
 <div class="modal-overlay" id="importModalOverlay">
   <div class="modal" style="width:min(99vw,1400px);max-height:92vh;overflow-y:auto;padding:24px 28px;">
@@ -2944,7 +2967,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606230100"></script>
+<script src="js/render.js?v=202606230300"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

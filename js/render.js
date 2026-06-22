@@ -4734,7 +4734,13 @@ function renderImportPreview(rows) {
     row += '<td style="padding:5px 6px;text-align:right;font-family:monospace;font-size:0.78rem;white-space:nowrap;border-right:1px solid var(--border)"><span style="color:' + tipoColor + '">' + tipoSign + fmtBR(r.value) + '</span></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-cat-btn" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onclick="_openImportCatPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">— Sem categoria —</span><select class="import-cat-sel" data-idx="' + i + '" data-cat="' + (sugCat||'').replace(/"/g,'&quot;') + '" onchange="onImportCatChange(this)" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + catIcon + '</span></div></td>';
     row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><div style="display:flex;align-items:center;gap:3px"><span class="import-sub-btn" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" onclick="_openImportSubPicker(this)" style="display:inline-block;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:4px;font-size:0.73rem;cursor:pointer;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">— Nenhuma —</span><select class="import-sub-sel" data-idx="' + i + '" data-sub="' + (sugSub||'').replace(/"/g,'&quot;') + '" onchange="onImportSubChange(this)" style="display:none"></select><span style="font-size:0.7rem;flex-shrink:0">' + subIcon + '</span></div></td>';
-    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)"><select class="import-terc-sel" data-idx="' + i + '" style="' + selStyle + 'min-width:110px"></select></td>';
+    row += '<td style="padding:4px 5px;border-right:1px solid var(--border)">'
+      + '<div style="display:flex;align-items:center;gap:4px">'
+      + '<select class="import-terc-sel" data-idx="' + i + '" style="' + selStyle + 'min-width:96px"></select>'
+      + '<button type="button" onclick="openSplit(' + i + ')" title="Desmembrar: parte do valor para um terceiro (cria conta a receber)" style="background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.4);color:var(--accent);border-radius:5px;padding:2px 6px;font-size:0.8rem;cursor:pointer;line-height:1">✂️</button>'
+      + '</div>'
+      + '<span id="split-badge-' + i + '">' + _splitBadgeHtml(r) + '</span>'
+      + '</td>';
     var vencVal = r.xlsxVenc || '';
     // Converte DD/MM/AAAA para AAAA-MM-DD para o input type=date
     var vencIso = '';
@@ -5057,6 +5063,54 @@ function closeReconcile() {
   if (ov) ov.style.display = 'none';
 }
 
+// ── Desmembrar lançamento: parte do valor vai para um terceiro ───────────────
+// Modelo padrão do app: a parte do terceiro vira despesa "Dividas de terceiros"
+// (no cartão) + espelho "Entrada Terceiro" (conta a receber, pendente).
+var _splitIdx = -1;
+function _splitBadgeHtml(r) {
+  if (!r || !r._split || !(r._split.value > 0)) return '';
+  return '<div style="font-size:0.66rem;color:var(--accent);margin-top:3px;white-space:nowrap;font-weight:700">✂️ ' + fmtBR(r._split.value) + ' → ' + (r._split.terceiro || '?') + '</div>';
+}
+function openSplit(idx) {
+  _splitIdx = idx;
+  var r = importParsedRows[idx];
+  if (!r) return;
+  document.getElementById('splitInfo').innerHTML = '<strong>' + (r.desc || r.descRaw || '') + '</strong><br>Valor total: <strong>' + fmtBR(r.value) + '</strong>';
+  var sel = document.getElementById('splitTerceiro');
+  var tercs = (typeof loadTerceiros === 'function') ? (loadTerceiros() || []) : [];
+  sel.innerHTML = '<option value="">— selecione —</option>' + tercs.slice().sort(function(a, b) { return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); }).map(function(t) { return '<option value="' + (t.nome || '').replace(/"/g, '&quot;') + '">' + (t.nome || '') + '</option>'; }).join('');
+  document.getElementById('splitValor').value = (r._split && r._split.value) ? r._split.value : '';
+  if (r._split && r._split.terceiro) sel.value = r._split.terceiro;
+  document.getElementById('splitRemoveBtn').style.display = r._split ? '' : 'none';
+  _splitUpdateInfo();
+  document.getElementById('splitOverlay').style.display = 'flex';
+}
+function _splitUpdateInfo() {
+  var r = importParsedRows[_splitIdx]; if (!r) return;
+  var tval = parseFloat(document.getElementById('splitValor').value) || 0;
+  var pv = document.getElementById('splitPreview');
+  if (tval <= 0) { pv.innerHTML = '<span style="color:var(--muted)">Informe quanto desse lançamento é do terceiro.</span>'; return; }
+  if (tval >= r.value) { pv.innerHTML = '<span style="color:#ef4444">O valor do terceiro deve ser menor que ' + fmtBR(r.value) + '.</span>'; return; }
+  var me = Math.round((r.value - tval) * 100) / 100;
+  pv.innerHTML = 'Sua parte (despesa): <strong>' + fmtBR(me) + '</strong><br>Parte do terceiro (Dívida de terceiros → a receber): <strong style="color:var(--accent)">' + fmtBR(tval) + '</strong>';
+}
+function confirmSplit() {
+  var r = importParsedRows[_splitIdx]; if (!r) return;
+  var tval = parseFloat(document.getElementById('splitValor').value) || 0;
+  var terc = document.getElementById('splitTerceiro').value;
+  if (tval <= 0 || tval >= r.value) { alert('Informe um valor do terceiro entre 0,01 e ' + fmtBR(r.value) + '.'); return; }
+  if (!terc) { alert('Selecione o terceiro.'); return; }
+  r._split = { value: Math.round(tval * 100) / 100, terceiro: terc };
+  var b = document.getElementById('split-badge-' + _splitIdx); if (b) b.innerHTML = _splitBadgeHtml(r);
+  closeSplit();
+}
+function removeSplit() {
+  var r = importParsedRows[_splitIdx]; if (r) delete r._split;
+  var b = document.getElementById('split-badge-' + _splitIdx); if (b) b.innerHTML = '';
+  closeSplit();
+}
+function closeSplit() { var ov = document.getElementById('splitOverlay'); if (ov) ov.style.display = 'none'; }
+
 // Conferência: cruza a fatura carregada (compras) com os lançamentos já na
 // plataforma (Black Itaú, mesmo mês de vencimento) e mostra a diferença dos 2 lados.
 function conferirFaturaPlataforma() {
@@ -5248,6 +5302,29 @@ function _doImportInner() {
   var lancamentos   = loadData();
   var added = 0;
   var firstMes = 0, firstAno = 0;
+  var tercDespesas = []; // partes de terceiro (Dividas de terceiros) p/ gerar espelhos
+
+  // Empurra um lançamento; se a linha foi desmembrada, divide em "minha parte" +
+  // "parte do terceiro" (Dividas de terceiros, que vira conta a receber via espelho).
+  function _pushSplit(obj, rr) {
+    if (!rr._split || !(rr._split.value > 0) || !rr._split.terceiro) { lancamentos.push(obj); added++; return; }
+    var full = Math.abs(obj.valor);
+    var tval = Math.round(rr._split.value * 100) / 100;
+    if (tval >= full) { lancamentos.push(obj); added++; return; } // proteção
+    var sign = obj.valor < 0 ? -1 : 1;
+    obj.valor = sign * (Math.round((full - tval) * 100) / 100); // minha parte
+    lancamentos.push(obj); added++;
+    var t = Object.assign({}, obj, {
+      id: obj.id + '_t',
+      valor: sign * tval,
+      categoria: 'Dividas de terceiros',
+      subCategoria: '',
+      terceiro: rr._split.terceiro,
+      groupId: obj.groupId ? obj.groupId + '_t' : undefined
+    });
+    lancamentos.push(t); added++;
+    tercDespesas.push(t);
+  }
 
   checked.forEach(function(idx) {
     var r = importParsedRows[idx];
@@ -5299,8 +5376,7 @@ function _doImportInner() {
     if (isParc) { p0.parcAtual = r.parcAtual; p0.parcTotal = r.parcTotal; }
     if (chosenTerc) p0.terceiro = chosenTerc;
     if (!firstMes) { firstMes = mes; firstAno = ano; }
-    lancamentos.push(p0);
-    added++;
+    _pushSplit(p0, r);
     for (var i = 1; i <= remaining; i++) {
       // Parcelas futuras: a data fica igual à da 1ª parcela importada.
       // Apenas mes/ano (usados para agrupamento) avançam mês a mês.
@@ -5320,10 +5396,15 @@ function _doImportInner() {
       };
       if (isParc) { fLanc.parcAtual = r.parcAtual + i; fLanc.parcTotal = r.parcTotal; }
       if (chosenTerc) fLanc.terceiro = chosenTerc;
-      lancamentos.push(fLanc);
-      added++;
+      _pushSplit(fLanc, r);
     }
   });
+
+  // Gera os espelhos "Entrada Terceiro" (conta a receber) das partes de terceiro
+  if (tercDespesas.length && typeof _criarEspelhosTerceiros === 'function') {
+    var _esp = _criarEspelhosTerceiros(tercDespesas);
+    for (var _ei = 0; _ei < _esp.length; _ei++) { lancamentos.push(_esp[_ei]); added++; }
+  }
 
   saveData(lancamentos);
   closeImportModal();
