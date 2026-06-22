@@ -5300,29 +5300,32 @@ function conferirFaturaPlataforma() {
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
   var emOutroTot = emOutro.reduce(function(s, x) { return s + x.r.value; }, 0);
-  var noCardTot = faturaTot - faltandoTot - emOutroTot; // compras que estão DE FATO no card-alvo
   var platTot = plat.reduce(function(s, l) { return s + (parseFloat(l.valor) || 0); }, 0); // total REAL na plataforma (= card)
   var platAbs = Math.abs(platTot);
   var soPlatTot = soPlat.reduce(function(s, l) { return s + Math.abs(parseFloat(l.valor) || 0); }, 0);
+  var matchedPlatTot = Math.max(0, platAbs - soPlatTot); // compras DESTA fatura que estão no card (lado plataforma)
+  var residual = faturaTot - faltandoTot - emOutroTot - matchedPlatTot; // diferença de valor (lançamentos antigos)
   var d = window._itauDiag || {};
 
   var H = [];
   H.push('<div style="display:flex;flex-wrap:wrap;gap:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">');
   H.push('<span>Compras na fatura: <strong>' + f(faturaTot) + '</strong> (' + importParsedRows.length + ')</span>');
-  H.push('<span>No card de ' + (alvoLabel || '—') + ': <strong style="color:var(--green)">' + f(noCardTot) + '</strong></span>');
-  H.push('<span>Lançado em OUTRO mês: <strong style="color:#fb923c">' + f(emOutroTot) + '</strong> (' + emOutro.length + ')</span>');
   H.push('<span>Faltando lançar: <strong style="color:' + (faltando.length ? '#ef4444' : 'var(--green)') + '">' + f(faltandoTot) + '</strong> (' + faltando.length + ')</span>');
+  H.push('<span>Card de ' + (alvoLabel || '—') + ' (plataforma): <strong>' + f(platAbs) + '</strong> (' + plat.length + ')</span>');
+  H.push('<span>Extras no card (fora da fatura): <strong style="color:var(--accent)">' + f(soPlatTot) + '</strong> (' + soPlat.length + ')</span>');
   H.push('</div>');
   if (!faltando.length) {
     H.push('<div style="font-weight:700;color:var(--green);margin-bottom:6px">✅ Fatura completa: todas as ' + importParsedRows.length + ' compras já estão lançadas (nada a importar).</div>');
   }
-  // Reconciliação do card (fecha a conta): card = compras no mês + extras
-  H.push('<div style="color:var(--text2);font-size:0.78rem;margin-bottom:8px;padding:8px 12px;background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.25);border-radius:8px">'
-    + '<strong>Por que o card (' + f(platAbs) + ') é menor que a fatura (' + f(faturaTot) + '):</strong><br>'
-    + '• R$ ' + f(emOutroTot) + ' das suas compras (' + emOutro.length + ' lançamentos) estão na plataforma, mas em <strong>OUTRO mês</strong> (não entram no card de ' + (alvoLabel || '—') + ') — lista abaixo.<br>'
-    + '• O card ainda tem R$ ' + f(soPlatTot) + ' de <strong>extras</strong> (' + soPlat.length + ') que não são desta fatura.<br>'
-    + 'Conta: card ' + f(platAbs) + ' = compras no mês ' + f(noCardTot) + ' + extras ' + f(soPlatTot) + '.</div>');
-  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura tem ' + d.estornoN + ' estorno(s)/crédito(s) somando -' + f(d.estornoSum) + ' que NÃO são lançados como despesa.</div>');
+  // Reconciliação do card (fecha a conta de forma consistente)
+  var conta = [];
+  conta.push('<strong>Composição do card de ' + (alvoLabel || '—') + ' (' + f(platAbs) + '):</strong>');
+  conta.push('• R$ ' + f(matchedPlatTot) + ' = compras DESTA fatura já lançadas neste mês.');
+  if (soPlat.length) conta.push('• R$ ' + f(soPlatTot) + ' = <strong>extras</strong> (' + soPlat.length + ') que NÃO são desta fatura (lançamentos antigos/duplicados/manuais — lista abaixo).');
+  if (emOutro.length) conta.push('• R$ ' + f(emOutroTot) + ' das compras estão lançadas com vencimento em OUTRO mês (lista abaixo).');
+  if (Math.abs(residual) > 0.01) conta.push('• R$ ' + f(Math.abs(residual)) + ' = diferença de valor: lançamentos antigos com valor/descrição diferente do da fatura (pareiam, mas o valor lançado difere).');
+  H.push('<div style="color:var(--text2);font-size:0.78rem;margin-bottom:8px;padding:8px 12px;background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.25);border-radius:8px">' + conta.join('<br>') + '</div>');
+  if (d && d.estornoN > 0) H.push('<div style="color:var(--muted);font-size:0.74rem;margin-bottom:10px">Obs: a fatura declarada é ' + (d.declarado != null ? f(d.declarado) : '—') + ' = compras ' + f(faturaTot) + ' − ' + f(d.estornoSum) + ' de estornos/créditos (que não são lançados como despesa).</div>');
 
   function tabela(titulo, cor, itens, getData, getDesc, getVal, tot) {
     var s = '<div style="margin-bottom:14px">';
