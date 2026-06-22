@@ -5177,18 +5177,27 @@ function _toggleAllExtras(checked) {
 // outro pagamento (por isso não entravam no card). Mantém categoria/terceiro/valor.
 async function _moverParaBlackItau() {
   var ids = (window._reconcileFixPgtoIds || []).filter(function(x) { return x != null && x !== ''; });
-  if (!ids.length) { alert('Nenhum lançamento para mover.'); return; }
-  var msg = 'Mover ' + ids.length + ' lançamento(s) para o pagamento "Black Itau"?\n\nMantém categoria, terceiro, valor e vencimento — só corrige o pagamento, pra entrarem no card do cartão.';
-  var ok = (typeof _showSimpleConfirm === 'function') ? await _showSimpleConfirm('🏦 Mover p/ Black Itaú', msg, 'Mover ' + ids.length, 'var(--accent2)') : confirm(msg);
+  if (!ids.length) { alert('Nenhum lançamento para corrigir.'); return; }
+  var msg = 'Fazer ' + ids.length + ' lançamento(s) entrarem no card do Black Itaú?\n\n• pagamento → "Black Itau"\n• categoria "Entrada Terceiro" → "Dividas de terceiros" (passa a contar no card)\n\nMantém valor, terceiro e vencimento.';
+  var ok = (typeof _showSimpleConfirm === 'function') ? await _showSimpleConfirm('🏦 Fazer entrar no card', msg, 'Corrigir ' + ids.length, 'var(--accent2)') : confirm(msg);
   if (!ok) return;
   var set = {}; ids.forEach(function(id) { set[String(id)] = true; });
+  var patchOf = function(l) {
+    var p = { pagamento: 'Black Itau' };
+    if (l.categoria === 'Entrada Terceiro') { p.categoria = 'Dividas de terceiros'; if (l.subCategoria === 'Entrada Terceiro') p.subCategoria = ''; }
+    return p;
+  };
+  var patches = {};
   if (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) {
-    _memCache.lancamentos = _memCache.lancamentos.map(function(l) { return (l.id != null && set[String(l.id)]) ? Object.assign({}, l, { pagamento: 'Black Itau' }) : l; });
+    _memCache.lancamentos = _memCache.lancamentos.map(function(l) {
+      if (l.id != null && set[String(l.id)]) { var p = patchOf(l); patches[String(l.id)] = p; return Object.assign({}, l, p); }
+      return l;
+    });
   }
-  ids.forEach(function(id) { if (typeof dbUpdateLancamento === 'function') dbUpdateLancamento(id, { pagamento: 'Black Itau' }).catch(function(e) { console.warn('[moverBlackItau]', e && e.message); }); });
+  ids.forEach(function(id) { if (typeof dbUpdateLancamento === 'function') dbUpdateLancamento(id, patches[String(id)] || { pagamento: 'Black Itau' }).catch(function(e) { console.warn('[moverBlackItau]', e && e.message); }); });
   if (typeof renderAll === 'function') { try { renderAll(); } catch (e) {} }
   if (typeof renderCartoesTab === 'function') { try { renderCartoesTab(); } catch (e) {} }
-  alert('🏦 ' + ids.length + ' lançamento(s) movido(s) para Black Itaú. Reconferindo…');
+  alert('🏦 ' + ids.length + ' lançamento(s) corrigido(s) para entrar no card. Reconferindo…');
   conferirFaturaPlataforma();
 }
 
@@ -5371,7 +5380,8 @@ function conferirFaturaPlataforma() {
     });
   });
   var foraDoCardTot = foraDoCard.reduce(function(s, x) { return s + Math.abs(parseFloat(x.l.valor) || 0); }, 0);
-  var fixaveis = foraDoCard.filter(function(x) { return x.fixPgto && x.l.id != null; });
+  // Corrigíveis = despesas que dá pra fazer entrar no card (pagamento e/ou categoria).
+  var fixaveis = foraDoCard.filter(function(x) { return x.l.id != null && (x.l.tipo === 'despesa' || x.l.tipo == null); });
   window._reconcileFixPgtoIds = fixaveis.map(function(x) { return String(x.l.id); });
 
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
@@ -5425,9 +5435,9 @@ function conferirFaturaPlataforma() {
       var dv = '<div style="margin-bottom:14px">';
       dv += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">';
       dv += '<span style="font-weight:700;color:#fbbf24">🟣 Lançadas, mas FORA do card de Black Itaú (' + foraDoCard.length + ') — ' + f(foraDoCardTot) + '</span>';
-      if (fixN) dv += '<button onclick="_moverParaBlackItau()" style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.45);color:#60a5fa;border-radius:7px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer">🏦 Mover ' + fixN + ' p/ Black Itaú</button>';
+      if (fixN) dv += '<button onclick="_moverParaBlackItau()" style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.45);color:#60a5fa;border-radius:7px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer">🏦 Fazer ' + fixN + ' entrar no card</button>';
       dv += '</div>';
-      dv += '<div style="color:var(--muted);font-size:0.72rem;margin-bottom:6px">Estas compras existem, mas foram lançadas com <strong>pagamento diferente de Black Itaú</strong> (ou como Entrada Terceiro), por isso não entram no card. O botão move as de "outro pagamento" para Black Itaú (mantém categoria, terceiro e valor).</div>';
+      dv += '<div style="color:var(--muted);font-size:0.72rem;margin-bottom:6px">Estas compras existem, mas estão <strong>fora do card</strong>: pagamento ≠ Black Itaú, ou categoria <strong>Entrada Terceiro</strong> (que é só o a-receber, não conta como gasto do cartão). O botão corrige: pagamento → Black Itaú e, nas "Entrada Terceiro", categoria → <strong>Dívida de terceiros</strong> (que conta no card e mantém o terceiro). Mantém valor, terceiro e vencimento.</div>';
       dv += '<div style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.76rem">';
       dv += '<thead><tr style="position:sticky;top:0;background:var(--surface2)"><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:left;padding:5px 8px">Descrição</th><th style="text-align:left;padding:5px 8px">Motivo</th><th style="text-align:right;padding:5px 8px">Valor</th></tr></thead><tbody>';
       foraDoCard.forEach(function(x) {
