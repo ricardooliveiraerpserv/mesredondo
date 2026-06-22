@@ -4577,9 +4577,10 @@ function renderImportPreview(rows) {
 
   // Índice de fixos: desc+valor → lancamento (recorrente = mesma desc/valor qualquer mês)
   var _byFixed = {};
-  // Parcelado SEM depender da descrição (que vem truncada/ilegível): valor + total
-  // de parcelas + data da compra. Identificador forte mesmo com desc divergente.
-  var _byValParcDate = {};
+  // Índices SEM depender da descrição (que vem truncada/ilegível em parcelados):
+  var _byValParcDate = {}; // valor + total de parcelas + data da compra
+  var _byValDate = {};     // valor + data da compra (qualquer desc/parcela)
+  var _byValParc = {};     // valor + total de parcelas (sem data)
   _allExist.forEach(function(l) {
     var dn = _stripParc(l.desc);
     var v  = Math.round(Math.abs(_valorExib(l)||0)*100);
@@ -4593,11 +4594,11 @@ function renderImportPreview(rows) {
     if ((l.tipoLanc === 'fixo' || l.recorr === 'fixo') && !_byFixed[base]) {
       _byFixed[base] = l;
     }
-    // Parcelado por valor+totalParcelas+data (independe da descrição)
+    if (dt && !_byValDate[t+'|'+v+'|'+dt]) _byValDate[t+'|'+v+'|'+dt] = l;
     var pt = l.parcTotal || l.totalParcelas;
-    if (pt && pt > 1 && dt) {
-      var kpd = t+'|'+v+'|'+pt+'|'+dt;
-      if (!_byValParcDate[kpd]) _byValParcDate[kpd] = l;
+    if (pt && pt > 1) {
+      if (dt && !_byValParcDate[t+'|'+v+'|'+pt+'|'+dt]) _byValParcDate[t+'|'+v+'|'+pt+'|'+dt] = l;
+      if (!_byValParc[t+'|'+v+'|'+pt]) _byValParc[t+'|'+v+'|'+pt] = l;
     }
   });
 
@@ -4632,11 +4633,12 @@ function renderImportPreview(rows) {
     if (dt && _byData[base+'|'+dt]) return _byData[base+'|'+dt];
     // Parcelado 3: desc+valor — se QUALQUER parcela dessa compra existe no banco
     if (_byVal[base]) return _byVal[base];
-    // Parcelado 4: SEM descrição — valor + total de parcelas + data da compra.
-    // Pega casos de descrição truncada/ilegível (ex: "????L") que divergem entre
-    // a fatura e o que foi lançado, mas têm valor/parcelas/data idênticos.
+    // Parcelado 4+: SEM descrição (truncada/ilegível "????L"). Tenta, do mais forte
+    // ao mais frouxo: valor+parcelas+data → valor+data → valor+parcelas.
     var _pt = r.parcTotal || 0;
     if (_pt > 1 && dt && _byValParcDate[t+'|'+v+'|'+_pt+'|'+dt]) return _byValParcDate[t+'|'+v+'|'+_pt+'|'+dt];
+    if (dt && _byValDate[t+'|'+v+'|'+dt]) return _byValDate[t+'|'+v+'|'+dt];
+    if (_pt > 1 && _byValParc[t+'|'+v+'|'+_pt]) return _byValParc[t+'|'+v+'|'+_pt];
 
     return null;
   };
