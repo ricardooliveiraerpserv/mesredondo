@@ -3149,6 +3149,7 @@ function onImportSubChange(subSel) {
 
 // ── Modal open/close ──
 function openImportModal() {
+  window._importMode = 'auto';
   try {
     learnFromAll();
     var sel = document.getElementById('importDefaultCat');
@@ -3165,6 +3166,13 @@ function openImportModal() {
     FSEL.build('fsel-impFiltroSituacao', 'impFiltroSituacao', [{value:'',text:'Todos'},{value:'novo',text:'Apenas novos'},{value:'dup',text:'Apenas duplicados'}], function(){ applyImportFilters(); });
   }
   document.getElementById('importModalOverlay').classList.add('open');
+}
+
+// Importa direto o .xlsx cru exportado pelo app Itaú (Black/Personnalité), sem o modelo.
+function openImportItauRaw() {
+  window._importMode = 'itau';
+  var inp = document.getElementById('importFileInput');
+  if (inp) { inp.value = ''; inp.click(); }
 }
 
 function closeImportModal() {
@@ -3190,6 +3198,7 @@ function closeImportModal() {
 function handleImportDrop(e) {
   e.preventDefault();
   document.getElementById('importDropZone').style.borderColor = 'var(--border)';
+  window._importMode = 'auto';
   var file = e.dataTransfer.files[0];
   if (file) handleImportFile(file);
 }
@@ -3522,7 +3531,42 @@ function processXLSXData(sstXml, wsXml) {
   // ── Find header row + map columns by name ─────────────────
   var headerRowIdx = -1;
   var colMap = { date:0, desc:1, parc:2, amt:3, cat:4, sub:5, terc:6, venc:7, pago:8, pgto:9, tipoLanc:10, nmeses:11, tipo:12 }; // defaults match planilha modelo
-  parsedRows.forEach(function(pr) {
+
+  // ── Layout CRU exportado pelo app Itaú (Black/Personnalité) ──────────
+  // Cabeçalho: Data | Lançamento | Parcelamento | Valor | … | Nome — a Data NÃO fica na col A
+  // (há metadados de nome/agência/conta/total acima) e a coluna de descrição é "Lançamento".
+  var itauRaw = false;
+  var _forceItau = (typeof window !== 'undefined' && window._importMode === 'itau');
+  (function detectItau() {
+    var normH = function(x) { return String(x == null ? '' : x).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+    for (var pi = 0; pi < parsedRows.length; pi++) {
+      var pr = parsedRows[pi], cells = pr.cells;
+      var iData = -1, iLanc = -1, iValor = -1, iParc = -1;
+      Object.keys(cells).forEach(function(ci) {
+        var h = normH(cells[ci]);
+        if (h === 'data') iData = parseInt(ci);
+        else if (h === 'lancamento') iLanc = parseInt(ci);
+        else if (h === 'valor') iValor = parseInt(ci);
+        else if (h === 'parcelamento') iParc = parseInt(ci);
+      });
+      if (iData >= 0 && iLanc >= 0 && iValor >= 0) {
+        itauRaw = true;
+        headerRowIdx = pr.r;
+        colMap.date = iData; colMap.desc = iLanc; colMap.amt = iValor;
+        colMap.parc = iParc >= 0 ? iParc : (iData + 2);
+        // Colunas inexistentes no layout cru → desabilita (lidas em branco)
+        colMap.cat = -1; colMap.sub = -1; colMap.venc = -1; colMap.pago = -1;
+        colMap.pgto = -1; colMap.tipoLanc = -1; colMap.nmeses = -1; colMap.tipo = -1; colMap.terc = -1;
+        break;
+      }
+    }
+  })();
+  if (_forceItau && !itauRaw) {
+    alert('Não reconheci o layout da fatura Itaú neste arquivo.\nUse o .xlsx exportado pelo app (Fatura Fechada), sem editar o cabeçalho.');
+    return;
+  }
+
+  if (!itauRaw) parsedRows.forEach(function(pr) {
     var a = String(pr.cells[0] || '').trim().toLowerCase();
     var b = String(pr.cells[1] || '').trim().toLowerCase();
     if (a === 'data' && b.indexOf('descri') !== -1) {
@@ -3616,7 +3660,11 @@ function processXLSXData(sstXml, wsXml) {
 
     // Parcela
     var parcAtual = null, parcTotal = null, cleanDesc = descVal;
-    if (parcRaw && /\d+\/\d+/.test(String(parcRaw))) {
+    if (itauRaw && parcRaw && /parcela/i.test(String(parcRaw))) {
+      // Itaú: coluna Parcelamento = "Parcela 1 de 2"
+      var pmi = String(parcRaw).match(/(\d+)\s*de\s*(\d+)/i);
+      if (pmi) { parcAtual = parseInt(pmi[1]); parcTotal = parseInt(pmi[2]); }
+    } else if (parcRaw && /\d+\/\d+/.test(String(parcRaw))) {
       var pm = String(parcRaw).match(/(\d+)\/(\d+)/);
       if (pm) { parcAtual = parseInt(pm[1]); parcTotal = parseInt(pm[2]); }
     } else {
@@ -3631,8 +3679,14 @@ function processXLSXData(sstXml, wsXml) {
     var matchedSub = matchSubName(matchedCat, subVal);
 
     var rawAmt = parseFloat(amtVal);
+    if (itauRaw) {
+      // Na fatura Itaú a COMPRA vem positiva (despesa). O pagamento da fatura anterior
+      // e estornos/créditos vêm negativos → ignorados na importação.
+      if (rawAmt < 0 || /pagamento efetuado/i.test(descVal)) return;
+      if (!pgtoVal) pgtoVal = 'Black Itau';
+    }
     // Infer tipo from sign if not explicitly set in column
-    var tipoFromSign = rawAmt < 0 ? 'despesa' : 'receita';
+    var tipoFromSign = itauRaw ? 'despesa' : (rawAmt < 0 ? 'despesa' : 'receita');
     var inferredTipo = tipoXlsx.indexOf('rec') !== -1 ? 'receita'
                      : tipoXlsx.indexOf('des') !== -1 ? 'despesa'
                      : tipoFromSign;

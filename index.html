@@ -2120,16 +2120,19 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       Parcelados são detectados automaticamente pelo padrão <code style="color:var(--accent)">Nome 06/10</code> (parcela 6 de 10 → 4 parcelas a lançar).<br>
       <span style="color:var(--text2);font-size:0.8rem">💳 Use a planilha <strong>Fatura-Importacao.xlsx</strong> para preencher Categoria, Sub-categoria, Vencimento, Pago e <strong>Pagamento</strong> antes de importar.</span>
     </p>
-    <div style="margin-bottom:16px;">
+    <div style="margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
       <button onclick="downloadTemplateImportacao()" style="background:rgba(240,192,64,0.10);border:1px solid rgba(240,192,64,0.40);color:var(--accent);border-radius:8px;padding:8px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;display:inline-flex;align-items:center;gap:8px;">
         ⬇ Baixar Planilha Modelo (com suas listas)
       </button>
-      <span style="font-size:0.72rem;color:var(--muted);margin-left:10px;">Categorias, pagamentos e terceiros já preenchidos do seu perfil</span>
+      <button onclick="openImportItauRaw()" title="Importar direto o arquivo .xlsx exportado pelo app Itaú, sem precisar do modelo" style="background:rgba(74,240,160,0.10);border:1px solid rgba(74,240,160,0.40);color:var(--accent2);border-radius:8px;padding:8px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;display:inline-flex;align-items:center;gap:8px;">
+        💳 Importar Black Itaú (layout do banco)
+      </button>
+      <span style="font-size:0.72rem;color:var(--muted);">O botão Itaú lê a fatura crua: despesas, parcelamento e pagamento já preenchidos</span>
     </div>
 
     <!-- Upload area -->
     <div id="importDropZone" style="border:2px dashed var(--border);border-radius:10px;padding:22px;text-align:center;cursor:pointer;margin-bottom:16px;transition:border-color 0.2s;"
-      onclick="document.getElementById('importFileInput').click()"
+      onclick="window._importMode='auto';document.getElementById('importFileInput').click()"
       ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
       ondragleave="this.style.borderColor='var(--border)'"
       ondrop="handleImportDrop(event)">
@@ -2921,7 +2924,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202605291901"></script>
+<script src="js/render.js?v=202606221200"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>
