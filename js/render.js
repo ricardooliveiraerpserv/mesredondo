@@ -5328,6 +5328,21 @@ function conferirFaturaPlataforma() {
     if (pr.m !== alvoMes || pr.a !== alvoAno) emOutro.push({ r: r, m: m, pr: pr });
   });
 
+  // Diferença de valor: compra casou com lançamento existente, mas o VALOR lançado
+  // difere do da fatura (lançamento antigo com valor/desc diferente). Acionável.
+  var _byId = {};
+  all.forEach(function(l) { if (l.id != null) _byId[String(l.id)] = l; });
+  var difValor = [];
+  importParsedRows.forEach(function(r) {
+    if (!r._existingMatch) return;
+    var ids = (r._matchIds && r._matchIds.length) ? r._matchIds : (r._existingMatch.id != null ? [String(r._existingMatch.id)] : []);
+    var pv = 0, achou = false;
+    ids.forEach(function(id) { var l = _byId[id]; if (l) { pv += Math.abs(parseFloat(l.valor) || 0); achou = true; } });
+    if (!achou) pv = Math.abs(parseFloat(r._existingMatch.valor) || 0);
+    if (Math.abs(pv - r.value) > 0.01) difValor.push({ r: r, pv: pv, diff: r.value - pv });
+  });
+  var difValorTot = difValor.reduce(function(s, x) { return s + x.diff; }, 0);
+
   var faturaTot = importParsedRows.reduce(function(s, r) { return s + r.value; }, 0);
   var faltandoTot = faltando.reduce(function(s, r) { return s + r.value; }, 0);
   var emOutroTot = emOutro.reduce(function(s, x) { return s + x.r.value; }, 0);
@@ -5371,9 +5386,21 @@ function conferirFaturaPlataforma() {
     return s;
   }
 
-  if (!faltando.length && !soPlat.length && !emOutro.length) {
-    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão na plataforma neste mês e não há lançamentos a mais.</div>');
+  if (!faltando.length && !soPlat.length && !emOutro.length && !difValor.length) {
+    H.push('<div style="font-weight:700;color:var(--green);padding:8px 0">✅ Tudo confere: todas as compras da fatura estão na plataforma neste mês, com o mesmo valor, e não há lançamentos a mais.</div>');
   } else {
+    if (difValor.length) {
+      var dv = '<div style="margin-bottom:14px">';
+      dv += '<div style="font-weight:700;color:#fbbf24;margin-bottom:6px">🟣 Casou, mas com VALOR diferente do da fatura (' + difValor.length + ') — diferença ' + f(Math.abs(difValorTot)) + '</div>';
+      dv += '<div style="color:var(--muted);font-size:0.72rem;margin-bottom:6px">São lançamentos antigos cujo valor não bate com a fatura. Corrija o valor deles na tela de Lançamentos (ou exclua e reimporte).</div>';
+      dv += '<div style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.76rem">';
+      dv += '<thead><tr style="position:sticky;top:0;background:var(--surface2)"><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:left;padding:5px 8px">Descrição</th><th style="text-align:right;padding:5px 8px">Fatura</th><th style="text-align:right;padding:5px 8px">Lançado</th><th style="text-align:right;padding:5px 8px">Dif.</th></tr></thead><tbody>';
+      difValor.forEach(function(x) {
+        dv += '<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px;white-space:nowrap;color:var(--text2)">' + (x.r.date || '') + '</td><td style="padding:4px 8px">' + (x.r.desc || '') + '</td><td style="padding:4px 8px;text-align:right">' + f(x.r.value) + '</td><td style="padding:4px 8px;text-align:right;color:var(--text2)">' + f(x.pv) + '</td><td style="padding:4px 8px;text-align:right;color:' + (x.diff >= 0 ? '#ef4444' : 'var(--green)') + '">' + (x.diff >= 0 ? '+' : '-') + f(Math.abs(x.diff)) + '</td></tr>';
+      });
+      dv += '</tbody></table></div></div>';
+      H.push(dv);
+    }
     if (faltando.length) H.push(tabela('🔴 Na fatura, FALTANDO na plataforma', '#ef4444', faltando, function(r){return r.date;}, function(r){return r.desc;}, function(r){return r.value;}, faltandoTot));
     if (emOutro.length) H.push(tabela('🟠 Na fatura, mas com VENCIMENTO em outro mês (não entra no card de ' + (alvoLabel || '—') + ')', '#fb923c', emOutro, function(x){return x.r.date + ' → venc ' + (x.pr.m ? String(x.pr.m).padStart(2,'0') + '/' + x.pr.a : '?');}, function(x){return x.r.desc;}, function(x){return x.r.value;}, emOutroTot));
     // Extras: tabela com checkbox + botão de exclusão (limpar lixo de importações antigas)
