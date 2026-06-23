@@ -139,13 +139,20 @@ function _vencMesAno(l) {
 // ── Filtro de banco centralizado ──
 // Retorna todos os lançamentos já filtrados pelo contexto de banco ativo
 function _applyBancoFilter(items) {
-  const bancoAtivo     = getBancoAtivo();
-  const bancosIndepIds = loadBancos().filter(b => b.modo === 'independente').map(b => b.id);
-  return items.filter(l => {
-    if (bancoAtivo) return (l.banco || '') === bancoAtivo;
-    if (bancosIndepIds.length && bancosIndepIds.includes(l.banco || '')) return false;
-    return true;
-  });
+  const bancoAtivo = getBancoAtivo();
+  if (bancoAtivo) return items.filter(l => (l.banco || '') === bancoAtivo);
+
+  // CONSOLIDADO: soma SÓ lançamentos de bancos existentes e participantes.
+  // Respeita a seleção do modal "Consolidar" (mf_banco_consolid); sem seleção
+  // válida, usa todos os bancos não-independentes. Lançamentos SEM BANCO ou de
+  // banco apagado NUNCA entram — era o bug que inflava a despesa do consolidado.
+  const bancos = loadBancos();
+  const existentes = new Set(bancos.map(b => b.id));
+  const sel = getBancosConsolidadoIds().filter(id => existentes.has(id));
+  const ids = new Set(sel.length
+    ? sel
+    : bancos.filter(b => b.modo !== 'independente').map(b => b.id));
+  return items.filter(l => ids.has(l.banco || ''));
 }
 function loadDataBanco()    { return _applyBancoFilter(loadData()); }
 function getMonthData() {
@@ -1677,6 +1684,8 @@ function renderAllTable() {
   const pagFiltro = window.FSEL ? FSEL.getValues('filtroPagamento')     : [];
   const tercFiltro= window.FSEL ? FSEL.getValues('filtroTerceiro')      : [];
   const bancoFiltro= window.FSEL ? FSEL.getValues('filtroBanco')        : [];
+  // Set de bancos existentes — p/ o filtro "⚪ Sem banco" (sem banco OU banco apagado).
+  const _bancosExist = new Set(loadBancos().map(b => b.id));
   const _filtroBuscaEl = document.getElementById('filtroBusca');
   const busca = _filtroBuscaEl ? _filtroBuscaEl.value.toLowerCase() : '';
   const _filtroValorEl = document.getElementById('filtroValor');
@@ -1727,7 +1736,12 @@ function renderAllTable() {
       if (!pagNomesReais.length && pagIncluiVazio && pagValido) return false;
     }
     if (tercFiltro.length && !tercFiltro.includes(l.terceiro || '')) return false;
-    if (bancoFiltro.length && !bancoFiltro.includes(l.banco || '')) return false;
+    if (bancoFiltro.length) {
+      var _lb = l.banco || '';
+      var _orfao = (_lb === '' || !_bancosExist.has(_lb));
+      if (_orfao) { if (!bancoFiltro.includes('__sem_banco__')) return false; }
+      else if (!bancoFiltro.includes(_lb)) return false;
+    }
     if (busca) {
       const haystack = [(l.desc||'').replace(/\s*\(\d+\/\d+\)\s*$/, ''), l.categoria, l.subCategoria, l.pagamento, l.terceiro].join(' ').toLowerCase();
       if (!haystack.includes(busca)) return false;

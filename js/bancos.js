@@ -254,6 +254,8 @@ async function populateBancoSelects() {
   }
   if (window.FSEL && document.getElementById('fsel-filtroBanco')) {
     const opts = bancos.map(b => ({ value: b.id, text: (b.icone||'🏦')+' '+b.nome }));
+    // Acha lançamentos sem banco / de banco apagado (não entram no consolidado).
+    opts.push({ value: '__sem_banco__', text: '⚪ Sem banco' });
     FSEL.build('fsel-filtroBanco', 'filtroBanco', opts, function(){ renderAll(); });
   }
   const pBanco = document.getElementById('pBanco');
