@@ -2074,6 +2074,14 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
           <div style="font-size:0.62rem;color:var(--muted);margin-top:4px">Compras a partir deste dia vão para a próxima fatura</div>
         </div>
       </div>
+      <div style="margin-top:12px">
+        <label style="display:block;font-size:0.68rem;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Banco vinculado</label>
+        <select id="pagBanco"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;font-family:'Syne',sans-serif;font-size:0.85rem;outline:none;box-sizing:border-box">
+          <option value="">— Nenhum —</option>
+        </select>
+        <div style="font-size:0.62rem;color:var(--muted);margin-top:4px">As parcelas deste cartão contam no resultado deste banco (e no consolidado).</div>
+      </div>
       <div style="margin-top:10px;padding:8px 10px;background:rgba(240,192,64,0.07);border:1px solid rgba(240,192,64,0.2);border-radius:7px;font-size:0.72rem;color:var(--accent);line-height:1.6" id="pagCortePrev"></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:20px">
@@ -2968,12 +2976,12 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 <!-- 3. Módulos de dados (substituídos) -->
 <script src="js/bancos.js?v=202606231300"></script>
 <script src="js/categorias.js?v=202606231300"></script>
-<script src="js/lancamentos-e-dados.js?v=202606231300"></script>
+<script src="js/lancamentos-e-dados.js?v=202606231800"></script>
 <script src="js/transferencias.js?v=202605160100"></script>
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606231700"></script>
+<script src="js/render.js?v=202606231800"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

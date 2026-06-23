@@ -138,12 +138,31 @@ function _vencMesAno(l) {
 }
 // ── Filtro de banco centralizado ──
 // Retorna todos os lançamentos já filtrados pelo contexto de banco ativo
+// Mapa cartão→banco vinculado (config do pagamento). Parcelas de cartão sem
+// banco próprio contam no banco do cartão.
+function _cardBancoMap() {
+  var m = {};
+  if (typeof loadPagamentos === 'function') {
+    var norm = function(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
+    loadPagamentos().forEach(function(p){ if (p.cartao && p.banco) m[norm(p.nome)] = p.banco; });
+  }
+  return m;
+}
+// Banco EFETIVO de um lançamento: o próprio, ou (se vazio) o banco do cartão.
+function _effBanco(l, map) {
+  if (l.banco) return l.banco;
+  map = map || _cardBancoMap();
+  var norm = (l.pagamento||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+  return map[norm] || '';
+}
 function _applyBancoFilter(items) {
   const bancoAtivo     = getBancoAtivo();
   const bancosIndepIds = loadBancos().filter(b => b.modo === 'independente').map(b => b.id);
+  const cardMap = _cardBancoMap();
   return items.filter(l => {
-    if (bancoAtivo) return (l.banco || '') === bancoAtivo;
-    if (bancosIndepIds.length && bancosIndepIds.includes(l.banco || '')) return false;
+    var b = _effBanco(l, cardMap);
+    if (bancoAtivo) return b === bancoAtivo;
+    if (bancosIndepIds.length && bancosIndepIds.includes(b)) return false;
     return true;
   });
 }
@@ -1668,28 +1687,8 @@ function sortItems(items) {
 }
 
 function renderAllTable() {
-  // Cartão na lista NÃO é filtrado por banco: parcelas de cartão sem banco
-  // ficavam de fora no contexto de um banco específico. (Usuário não tem cartão
-  // em outro banco.) Outras telas usam getMonthData/loadData direto e não mudam.
-  const _normPg = function(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
-  const _cardNames = {};
-  if (typeof loadPagamentos === 'function') loadPagamentos().forEach(function(p){ if (p.cartao) _cardNames[_normPg(p.nome)] = 1; });
-  const _isCard = function(l){ return !!_cardNames[_normPg(l.pagamento)]; };
-  const all = (function(){
-    var bf = getMonthData();
-    if (typeof loadData !== 'function') return bf;
-    var de  = window._rangeFilter ? window._rangeFilter.de  : { mes: currentMonth, ano: currentYear };
-    var ate = window._rangeFilter ? window._rangeFilter.ate : { mes: currentMonth, ano: currentYear };
-    var deVal = de.ano*100+de.mes, ateVal = ate.ano*100+ate.mes;
-    var seen = {}; bf.forEach(function(l){ seen[l.id] = 1; });
-    var extra = loadData().filter(function(l){
-      if (seen[l.id]) return false;
-      if (!_isCard(l)) return false;
-      var ma = getMesAno(l); var v = ma.ano*100 + ma.mes;
-      return v >= deVal && v <= ateVal;
-    });
-    return extra.length ? bf.concat(extra) : bf;
-  })();
+  const all = getMonthData();
+  const _cardMap = _cardBancoMap(); // resolve banco do cartão no filtro de banco
   const tipo      = window.FSEL ? FSEL.getValues('filtroTipo')          : [];
   const status    = window.FSEL ? FSEL.getValues('filtroStatus')        : [];
   const cat       = window.FSEL ? FSEL.getValues('filtroCategoria')     : [];
@@ -1751,8 +1750,8 @@ function renderAllTable() {
       if (!pagNomesReais.length && pagIncluiVazio && pagValido) return false;
     }
     if (tercFiltro.length && !tercFiltro.includes(l.terceiro || '')) return false;
-    if (bancoFiltro.length && !_isCard(l)) {
-      var _lb = l.banco || '';
+    if (bancoFiltro.length) {
+      var _lb = _effBanco(l, _cardMap);  // banco efetivo (cartão → banco vinculado)
       var _orfao = (_lb === '' || !_bancosExist.has(_lb));
       if (_orfao) { if (!bancoFiltro.includes('__sem_banco__')) return false; }
       else if (!bancoFiltro.includes(_lb)) return false;

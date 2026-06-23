@@ -1025,6 +1025,14 @@ function populatePagSelects() {
   }
 }
 
+function _fillPagBanco(sel) {
+  var el = document.getElementById('pagBanco');
+  if (!el) return;
+  var bancos = (typeof loadBancos === 'function') ? loadBancos() : [];
+  el.innerHTML = '<option value="">— Nenhum —</option>' +
+    bancos.map(function(b){ return '<option value="'+b.id+'">'+(b.icone||'🏦')+' '+b.nome+'</option>'; }).join('');
+  el.value = sel || '';
+}
 function openPagModal() {
   document.getElementById('pagEditId').value = '';
   document.getElementById('pagNome').value = '';
@@ -1033,6 +1041,7 @@ function openPagModal() {
   document.getElementById('pagIsCartao').checked = false;
   document.getElementById('pagDiaVencimento').value = '';
   document.getElementById('pagDiaCorte').value = '';
+  _fillPagBanco('');
   document.getElementById('pagCartaoFields').style.display = 'none';
   document.getElementById('pagCortePrev').textContent = '';
   _setLogoPreview('pagLogoPreview', null, '💳');
@@ -1051,6 +1060,7 @@ async function editPagModal(id) {
   document.getElementById('pagIsCartao').checked = !!p.cartao;
   document.getElementById('pagDiaVencimento').value = p.diaVencimento || '';
   document.getElementById('pagDiaCorte').value = p.diaCorte || '';
+  _fillPagBanco(p.banco || '');
   document.getElementById('pagCartaoFields').style.display = p.cartao ? 'block' : 'none';
   _setLogoPreview('pagLogoPreview', p.logo || _logoFromName(p.nome), p.icone || '💳');
   _updatePagCortePrev();
@@ -1089,6 +1099,7 @@ async function savePagModal() {
     cartao: document.getElementById('pagIsCartao').checked,
     diaVencimento: document.getElementById('pagIsCartao').checked ? (parseInt(document.getElementById('pagDiaVencimento').value)||null) : null,
     diaCorte:      document.getElementById('pagIsCartao').checked ? (parseInt(document.getElementById('pagDiaCorte').value)||null)      : null,
+    banco:         document.getElementById('pagIsCartao').checked ? (document.getElementById('pagBanco').value || null) : null,
   };
   if (editId) { const idx = pags.findIndex(p => p.id === editId); if (idx >= 0) pags[idx] = entry; }
   else { pags.push(entry); }
