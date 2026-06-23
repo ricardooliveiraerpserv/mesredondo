@@ -140,29 +140,12 @@ function _vencMesAno(l) {
 // Retorna todos os lançamentos já filtrados pelo contexto de banco ativo
 // Mapa cartão→banco vinculado (config do pagamento). Parcelas de cartão sem
 // banco próprio contam no banco do cartão.
-function _cardBancoMap() {
-  var m = {};
-  if (typeof loadPagamentos === 'function') {
-    var norm = function(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
-    loadPagamentos().forEach(function(p){ if (p.cartao && p.banco) m[norm(p.nome)] = p.banco; });
-  }
-  return m;
-}
-// Banco EFETIVO de um lançamento: o próprio, ou (se vazio) o banco do cartão.
-function _effBanco(l, map) {
-  if (l.banco) return l.banco;
-  map = map || _cardBancoMap();
-  var norm = (l.pagamento||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
-  return map[norm] || '';
-}
 function _applyBancoFilter(items) {
   const bancoAtivo     = getBancoAtivo();
   const bancosIndepIds = loadBancos().filter(b => b.modo === 'independente').map(b => b.id);
-  const cardMap = _cardBancoMap();
   return items.filter(l => {
-    var b = _effBanco(l, cardMap);
-    if (bancoAtivo) return b === bancoAtivo;
-    if (bancosIndepIds.length && bancosIndepIds.includes(b)) return false;
+    if (bancoAtivo) return (l.banco || '') === bancoAtivo;
+    if (bancosIndepIds.length && bancosIndepIds.includes(l.banco || '')) return false;
     return true;
   });
 }
@@ -326,9 +309,18 @@ function _renderAll() {
 
   // getMonthData() já aplica _applyBancoFilter. FSEL adicional para filtro manual.
   const _bancoFiltroFSEL = window.FSEL ? FSEL.getValues('filtroBanco') : [];
-  const all = _bancoFiltroFSEL.length
+  let all = _bancoFiltroFSEL.length
     ? getMonthData().filter(l => _bancoFiltroFSEL.includes(l.banco || ''))
     : getMonthData();
+  // APURAÇÃO CONSOLIDADA = soma dos bancos. No consolidado, o resultado do mês
+  // conta SÓ lançamentos que pertencem a um banco — assim Itaú + NuBank bate
+  // exatamente com o Consolidado. Lançamentos sem banco (ex.: parcela de cartão
+  // sem conta) ficam fora DO RESULTADO (a fatura completa segue na aba Cartões).
+  // Vale só aqui no dashboard — a tela de Lançamentos não é afetada.
+  if (getBancoContexto() === 'consolidado') {
+    const _bv = new Set(loadBancos().filter(b => b.modo !== 'independente').map(b => b.id));
+    all = all.filter(l => _bv.has(l.banco || ''));
+  }
 
   // Categorias fora do orçamento
   const CAT_TERCEIROS_REC  = 'Entrada Terceiro';
@@ -1688,7 +1680,6 @@ function sortItems(items) {
 
 function renderAllTable() {
   const all = getMonthData();
-  const _cardMap = _cardBancoMap(); // resolve banco do cartão no filtro de banco
   const tipo      = window.FSEL ? FSEL.getValues('filtroTipo')          : [];
   const status    = window.FSEL ? FSEL.getValues('filtroStatus')        : [];
   const cat       = window.FSEL ? FSEL.getValues('filtroCategoria')     : [];
@@ -1751,7 +1742,7 @@ function renderAllTable() {
     }
     if (tercFiltro.length && !tercFiltro.includes(l.terceiro || '')) return false;
     if (bancoFiltro.length) {
-      var _lb = _effBanco(l, _cardMap);  // banco efetivo (cartão → banco vinculado)
+      var _lb = l.banco || '';
       var _orfao = (_lb === '' || !_bancosExist.has(_lb));
       if (_orfao) { if (!bancoFiltro.includes('__sem_banco__')) return false; }
       else if (!bancoFiltro.includes(_lb)) return false;
