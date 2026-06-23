@@ -139,20 +139,13 @@ function _vencMesAno(l) {
 // ── Filtro de banco centralizado ──
 // Retorna todos os lançamentos já filtrados pelo contexto de banco ativo
 function _applyBancoFilter(items) {
-  const bancoAtivo = getBancoAtivo();
-  if (bancoAtivo) return items.filter(l => (l.banco || '') === bancoAtivo);
-
-  // CONSOLIDADO: soma SÓ lançamentos de bancos existentes e participantes.
-  // Respeita a seleção do modal "Consolidar" (mf_banco_consolid); sem seleção
-  // válida, usa todos os bancos não-independentes. Lançamentos SEM BANCO ou de
-  // banco apagado NUNCA entram — era o bug que inflava a despesa do consolidado.
-  const bancos = loadBancos();
-  const existentes = new Set(bancos.map(b => b.id));
-  const sel = getBancosConsolidadoIds().filter(id => existentes.has(id));
-  const ids = new Set(sel.length
-    ? sel
-    : bancos.filter(b => b.modo !== 'independente').map(b => b.id));
-  return items.filter(l => ids.has(l.banco || ''));
+  const bancoAtivo     = getBancoAtivo();
+  const bancosIndepIds = loadBancos().filter(b => b.modo === 'independente').map(b => b.id);
+  return items.filter(l => {
+    if (bancoAtivo) return (l.banco || '') === bancoAtivo;
+    if (bancosIndepIds.length && bancosIndepIds.includes(l.banco || '')) return false;
+    return true;
+  });
 }
 function loadDataBanco()    { return _applyBancoFilter(loadData()); }
 function getMonthData() {
