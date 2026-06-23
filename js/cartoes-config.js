@@ -100,7 +100,10 @@ function renderCartoesTab() {
   const normStr = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
   const pags    = loadPagamentos();
   const cartoes = pags.filter(p => p.cartao);
-  const all     = loadDataBanco();
+  // Fatura é do CARTÃO, não de um banco — usa todos os dados (não filtra por
+  // banco), senão lançamentos do cartão sem banco somem da fatura no contexto
+  // de um banco específico (ex.: Junho mostrava 12.830 em vez de 22.770).
+  const all     = loadData();
   // Map normalized name -> original cartao object
   const cartaoMap = {};
   cartoes.forEach(p => { cartaoMap[normStr(p.nome)] = p; });
@@ -487,7 +490,8 @@ function _updatePagarFaturaInfo() {
   const nome = sel.value;
   if (!nome) { info.textContent = ''; return; }
   const normStr = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  const all = loadDataBanco();
+  // Pagar Fatura = fatura completa do cart\u00e3o, independente do banco selecionado.
+  const all = loadData();
   const pendentes = all.filter(l =>
     normStr(l.pagamento) === normStr(nome) &&
     _vencMesAno(l).mes === currentMonth &&
