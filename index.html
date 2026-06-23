@@ -786,6 +786,12 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
   <!-- provCardsTab movido para dentro da aba Provisão -->
 
+  <!-- POR CARTÃO (dashboard only) — fatura por cartão, sem terceiros -->
+  <div class="cards-section" data-tabs="dashboard" style="margin-bottom:8px">
+    <div class="cards-section-label">💳 Por Cartão <span style="font-size:0.5rem;color:var(--muted);font-weight:600">· sem terceiros · total <span id="dashCartoesTotal">R$ 0</span></span></div>
+    <div id="dashCartoesCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px"></div>
+  </div>
+
   <!-- % PROVISIONADO: abaixo dos cards, antes do dashboard -->
   <div data-tabs="dashboard" style="margin-bottom:8px">
     <div class="cards-section-label">📦 % do Orçamento</div>
@@ -2973,7 +2979,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606231300"></script>
+<script src="js/render.js?v=202606231500"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>
