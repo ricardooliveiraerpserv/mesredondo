@@ -289,43 +289,6 @@ function renderAll() {
   }
 }
 
-// Dashboard: total por cartão no mês (por VENCIMENTO), excluindo Entrada Terceiro
-// e Dívidas de terceiros. Usa loadData() (não filtra por banco) — fatura é do
-// cartão, igual à aba Cartões.
-function _renderDashCartoes() {
-  var el = document.getElementById('dashCartoesCards');
-  if (!el) return;
-  if (typeof loadPagamentos !== 'function') return;
-  var norm = function(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
-  var cartoes = loadPagamentos().filter(function(p){ return p.cartao; });
-  var map = {};
-  cartoes.forEach(function(p){ map[norm(p.nome)] = p; });
-  var EXCL = { 'Entrada Terceiro': 1, 'Dividas de terceiros': 1 };
-  var by = {};
-  cartoes.forEach(function(p){ by[p.nome] = 0; });
-  (loadData() || []).forEach(function(l){
-    if (l.tipo !== 'despesa') return;
-    if (l._espelhoDe) return;
-    if (EXCL[l.categoria]) return;
-    var c = map[norm(l.pagamento)];
-    if (!c) return;
-    if (!((typeof _inRangeVenc === 'function') ? _inRangeVenc(l) : _inRange(l))) return;
-    by[c.nome] = (by[c.nome] || 0) + Math.abs(+l.valor || 0);
-  });
-  var total = 0;
-  var html = cartoes.map(function(p){
-    var v = by[p.nome] || 0; total += v;
-    return '<div class="dc dc-red" style="padding:6px 8px">'
-      + '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">'
-      + '<span style="font-size:0.7rem">' + (p.icone || '💳') + '</span>'
-      + '<span class="dc-title" style="font-size:0.55rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + p.nome + '</span></div>'
-      + '<div class="dc-main red" style="font-size:0.95rem">' + fmt(v) + '</div></div>';
-  }).join('');
-  el.innerHTML = html || '<div class="empty-state" style="font-size:0.6rem">Nenhum cartão cadastrado.</div>';
-  var totEl = document.getElementById('dashCartoesTotal');
-  if (totEl) totEl.textContent = fmt(total);
-}
-
 function _renderAll() {
   updatePeriodoLabel();
   _checkLancFiltrosAtivos();
@@ -340,7 +303,6 @@ function _renderAll() {
   })();
 
   renderBancoCards();
-  _renderDashCartoes();
   _applyMobileLayout();
 
   // getMonthData() já aplica _applyBancoFilter. FSEL adicional para filtro manual.
@@ -2164,14 +2126,22 @@ function renderCatChart(despesas) {
   });
 
   const byCartao = {}, byOutros = {};
+  // Outros (não-cartão): respeita o contexto de banco.
   despesasMesCartao.forEach(l => {
     const key = l.pagamento || '(não informado)';
-    const v = _valorExib(l);
-    if (cartaoNomes.has(norm(key))) {
-      byCartao[key] = (byCartao[key]||0) + v;
-    } else {
-      byOutros[key] = (byOutros[key]||0) + v;
-    }
+    if (cartaoNomes.has(norm(key))) return; // cartão tratado abaixo
+    byOutros[key] = (byOutros[key]||0) + _valorExib(l);
+  });
+  // Cartões: fatura COMPLETA do cartão — não filtra por banco, por VENCIMENTO,
+  // sem terceiros (igual à aba Cartões e à lista de Lançamentos).
+  const _EXCL_CART = { 'Entrada Terceiro': 1, 'Dividas de terceiros': 1 };
+  (loadData() || []).forEach(l => {
+    if (l.tipo !== 'despesa') return;
+    if (l._espelhoDe) return;
+    if (_EXCL_CART[l.categoria]) return;
+    if (!cartaoNomes.has(norm(l.pagamento))) return;
+    if (typeof _inRangeVenc === 'function' && !_inRangeVenc(l)) return;
+    byCartao[l.pagamento] = (byCartao[l.pagamento]||0) + Math.abs(_valorExib(l));
   });
 
   makeBars('catBarsCartao', Object.entries(byCartao));
