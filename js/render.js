@@ -1706,7 +1706,28 @@ function sortItems(items) {
 }
 
 function renderAllTable() {
-  const all = getMonthData();
+  // Cartão na lista NÃO é filtrado por banco: parcelas de cartão sem banco
+  // ficavam de fora no contexto de um banco específico. (Usuário não tem cartão
+  // em outro banco.) Outras telas usam getMonthData/loadData direto e não mudam.
+  const _normPg = function(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
+  const _cardNames = {};
+  if (typeof loadPagamentos === 'function') loadPagamentos().forEach(function(p){ if (p.cartao) _cardNames[_normPg(p.nome)] = 1; });
+  const _isCard = function(l){ return !!_cardNames[_normPg(l.pagamento)]; };
+  const all = (function(){
+    var bf = getMonthData();
+    if (typeof loadData !== 'function') return bf;
+    var de  = window._rangeFilter ? window._rangeFilter.de  : { mes: currentMonth, ano: currentYear };
+    var ate = window._rangeFilter ? window._rangeFilter.ate : { mes: currentMonth, ano: currentYear };
+    var deVal = de.ano*100+de.mes, ateVal = ate.ano*100+ate.mes;
+    var seen = {}; bf.forEach(function(l){ seen[l.id] = 1; });
+    var extra = loadData().filter(function(l){
+      if (seen[l.id]) return false;
+      if (!_isCard(l)) return false;
+      var ma = getMesAno(l); var v = ma.ano*100 + ma.mes;
+      return v >= deVal && v <= ateVal;
+    });
+    return extra.length ? bf.concat(extra) : bf;
+  })();
   const tipo      = window.FSEL ? FSEL.getValues('filtroTipo')          : [];
   const status    = window.FSEL ? FSEL.getValues('filtroStatus')        : [];
   const cat       = window.FSEL ? FSEL.getValues('filtroCategoria')     : [];
@@ -1768,7 +1789,7 @@ function renderAllTable() {
       if (!pagNomesReais.length && pagIncluiVazio && pagValido) return false;
     }
     if (tercFiltro.length && !tercFiltro.includes(l.terceiro || '')) return false;
-    if (bancoFiltro.length) {
+    if (bancoFiltro.length && !_isCard(l)) {
       var _lb = l.banco || '';
       var _orfao = (_lb === '' || !_bancosExist.has(_lb));
       if (_orfao) { if (!bancoFiltro.includes('__sem_banco__')) return false; }
