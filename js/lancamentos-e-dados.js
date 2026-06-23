@@ -1119,7 +1119,11 @@ async function exportarExcel() {
   let dados = all.filter(l => {
     if (tipo.length     && !tipo.includes(l.tipo)) return false;
     if (status.length   && !status.includes(l.status)) return false;
-    if (cat.length      && !cat.includes(l.categoria)) return false;
+    if (cat.length) {
+      var _lcat = (l.categoria || '').trim();
+      if (_lcat === '') { if (!cat.includes('__sem_cat__')) return false; }
+      else if (!cat.includes(l.categoria)) return false;
+    }
     if (subCat.length   && !subCat.includes(l.subCategoria)) return false;
     if (tipoLanc.length && !tipoLanc.includes(l.tipoLanc || 'variavel')) return false;
     if (busca && ![l.desc, l.categoria, l.subCategoria, l.pagamento].join(' ').toLowerCase().includes(busca)) return false;

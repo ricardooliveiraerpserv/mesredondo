@@ -429,7 +429,9 @@ function populateCatSelects() {
 
   const sel = document.getElementById('filtroCategoria');
   const catsSortedAll = [...cats].sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  sel.innerHTML = '<option value="">Todas categorias</option>' + catsSortedAll.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+  sel.innerHTML = '<option value="">Todas categorias</option>'
+    + catsSortedAll.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('')
+    + '<option value="__sem_cat__">⚪ Sem categoria</option>';
   onFiltroCategChange(false);
 
   populatePagSelects();

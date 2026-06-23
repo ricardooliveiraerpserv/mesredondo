@@ -1704,7 +1704,12 @@ function renderAllTable() {
   let filtered = all.filter(l => {
     if (tipo.length      && !tipo.includes(l.tipo)) return false;
     if (status.length    && !status.includes(l.status)) return false;
-    if (cat.length       && !cat.includes(l.categoria)) return false;
+    if (cat.length) {
+      // "__sem_cat__" casa lançamentos sem categoria → entram na lista e na soma.
+      var _lcat = (l.categoria || '').trim();
+      if (_lcat === '') { if (!cat.includes('__sem_cat__')) return false; }
+      else if (!cat.includes(l.categoria)) return false;
+    }
     if (subCat.length    && !subCat.includes(l.subCategoria)) return false;
     if (semCat.includes('sem_cat') && (l.categoria && l.categoria.trim() !== '')) return false;
     if (semCat.includes('sem_sub') && (l.subCategoria && l.subCategoria.trim() !== '' && l.subCategoria !== 'Não identificado')) return false;
