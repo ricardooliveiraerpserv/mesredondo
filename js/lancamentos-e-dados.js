@@ -313,6 +313,23 @@ function setTercSort(col) {
   renderTerceirosTab();
 }
 
+// ── Controle "Recebido" das Dívidas de terceiro (local, não mexe no saldo) ──
+function _getRecebidosTerceiro() {
+  try { return new Set((JSON.parse(localStorage.getItem('mf_terc_recebido') || '[]')).map(String)); }
+  catch (e) { return new Set(); }
+}
+function _saveRecebidosTerceiro(set) {
+  try { localStorage.setItem('mf_terc_recebido', JSON.stringify([...set])); } catch (e) {}
+}
+function toggleRecebidoTerceiro(id) {
+  id = String(id);
+  var s = _getRecebidosTerceiro();
+  if (s.has(id)) s.delete(id); else s.add(id);
+  _saveRecebidosTerceiro(s);
+  if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
+}
+window.toggleRecebidoTerceiro = toggleRecebidoTerceiro;
+
 function renderTerceirosTab() {
   const COLORS_ENT = ['#22c55e','#4ade80','#86efac','#16a34a','#15803d'];
   const COLORS_DIV = ['#ef4444','#f87171','#fca5a5','#dc2626','#b91c1c'];
@@ -797,11 +814,14 @@ function renderTerceirosTab() {
     if (cardCont) cardCont.style.display = 'none';
   }
 
+  const _recebidos = _getRecebidosTerceiro();
   tbody.innerHTML = sorted.map(l => {
     const sid = String(l.id).replace(/'/g,"\\'");
     const isRec = l.tipo==='receita';
     const catLabel = l.categoria || '—';
-    return `<tr>
+    const isDivida = l.categoria === 'Dividas de terceiros';
+    const isReceb  = isDivida && _recebidos.has(String(l.id));
+    return `<tr${isReceb ? ' style="background:rgba(34,197,94,0.06)"' : ''}>
       <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="terc-check" data-id="${l.id}" onchange="tercUpdateBulkBar()" style="cursor:pointer;accent-color:var(--accent)"></td>
       <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--text2)">${(function(){
         const v=l.vencimento;
@@ -819,6 +839,7 @@ function renderTerceirosTab() {
       <td style="font-size:0.68rem">${(()=>{const b=loadBancos().find(x=>x.id===l.banco);return b?`<span style="color:${b.cor}">${b.icone||'🏦'} ${b.nome}</span>`:'—';})()}</td>
       <td style="text-align:right"><span class="${isRec?'val-pos':'val-neg'}">${isRec?'+':'-'}${fmt(_valorExib(l))}</span></td>
       <td style="text-align:center;white-space:nowrap">
+        ${isDivida ? `<button class="del-btn" onclick="toggleRecebidoTerceiro('${sid}')" title="${isReceb?'Desmarcar — o terceiro ainda não pagou':'Marcar que o terceiro te pagou de volta (só controle, não mexe no saldo)'}" style="color:${isReceb?'#22c55e':'var(--muted)'};background:${isReceb?'rgba(34,197,94,0.15)':'rgba(255,255,255,0.04)'};border:1px solid ${isReceb?'rgba(34,197,94,0.4)':'var(--border)'};border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">${isReceb?'✓ Recebido':'Receber'}</button>` : ''}
         ${l.status==='pendente'
           ? `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pago')" title="Marcar como pago" style="color:var(--green);background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">${l.tipo === 'receita' ? '✓ Receber' : '✓ Pagar'}</button>`
           : `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pendente')" title="Estornar para pendente" style="color:var(--danger);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">↩</button>`}
@@ -1606,23 +1627,10 @@ function setTipo(t) {
  * marcar o espelho como pago, ele soma de volta ao saldo.
  */
 function _criarEspelhosTerceiros(items) {
-  const espelhos = [];
-  let nextId = Date.now() + 1; // garante id único e diferente dos originais
-  for (const l of items) {
-    if (l.tipo === 'despesa' && l.categoria === 'Dividas de terceiros') {
-      espelhos.push({
-        ...l,
-        id: nextId++,
-        tipo: 'receita',
-        categoria: 'Entrada Terceiro',
-        subCategoria: 'Entrada Terceiro',
-        status: 'pendente',
-        _ts: Date.now(),
-        _espelhoDe: l.id,
-      });
-    }
-  }
-  return espelhos;
+  // Desativado (2026-06): "Dívida de terceiro" não cria mais o movimento espelho
+  // "Entrada Terceiro" automaticamente. O recebimento do terceiro agora é um
+  // controle (botão "Receber") na aba Terceiros — ver _getRecebidosTerceiro().
+  return [];
 }
 
 // Exporta os terceiros para Excel respeitando EXATAMENTE os mesmos filtros
@@ -1785,10 +1793,8 @@ async function salvarLancamento() {
       const _existingForMirror = data.find(x => String(x.id) === String(editId));
       const _wasDivida3 = _existingForMirror && _existingForMirror.categoria === 'Dividas de terceiros';
       const _isDivida3Now = categoria === 'Dividas de terceiros' && tipoAtual === 'despesa';
+      // Espelho "Entrada Terceiro" desativado — recebimento vira controle na aba Terceiros.
       let _editCreateMirror = false;
-      if (!_wasDivida3 && _isDivida3Now) {
-        _editCreateMirror = confirm('Esse lançamento foi alterado para "Dívida de terceiros". Deseja criar a receita espelho como "Entrada Terceiro"?');
-      }
 
       if (tipoLanc === 'parcelado') {
         const existing = data.find(x => String(x.id) === String(editId));
