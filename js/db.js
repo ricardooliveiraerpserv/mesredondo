@@ -162,7 +162,7 @@ async function dbUpdateLancamento(id, fields) {
       banco: 'banco', terceiro: 'terceiro', vencimento: 'vencimento',
       tipoLanc: 'tipo_lanc', mes: 'mes', ano: 'ano', data: 'data',
       parcAtual: 'parc_atual', parcTotal: 'parc_total', groupId: 'group_id',
-      totalParcelas: 'total_parcelas', recorr: 'recorr'
+      totalParcelas: 'total_parcelas', recorr: 'recorr', recebido: 'recebido'
     };
     row = { _ts: Date.now() };
     Object.keys(fields).forEach(function(k) {
@@ -273,6 +273,7 @@ function _dbRowToLanc(r) {
     banco:        r.banco,
     parcAtual:      r.parc_atual,
     parcTotal:      r.parc_total,
+    recebido:       r.recebido === true,
     _ts:            r._ts
   };
 }

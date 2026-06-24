@@ -321,11 +321,24 @@ function _getRecebidosTerceiro() {
 function _saveRecebidosTerceiro(set) {
   try { localStorage.setItem('mf_terc_recebido', JSON.stringify([...set])); } catch (e) {}
 }
+function _isRecebidoTerceiro(l) {
+  if (!l) return false;
+  if (l.recebido === true) return true;            // Supabase
+  return _getRecebidosTerceiro().has(String(l.id)); // fallback local
+}
 function toggleRecebidoTerceiro(id) {
   id = String(id);
+  var lanc = (typeof loadData === 'function') ? loadData().find(function(x){ return String(x.id) === id; }) : null;
+  var novo = !_isRecebidoTerceiro(lanc || { id: id });
+  // 1) localStorage — funciona na hora (e como fallback)
   var s = _getRecebidosTerceiro();
-  if (s.has(id)) s.delete(id); else s.add(id);
+  if (novo) s.add(id); else s.delete(id);
   _saveRecebidosTerceiro(s);
+  // 2) memória + Supabase — sincroniza entre dispositivos (precisa da coluna `recebido`)
+  if (lanc) lanc.recebido = novo;
+  if (typeof dbUpdateLancamento === 'function') {
+    try { dbUpdateLancamento(id, { recebido: novo }); } catch (e) {}
+  }
   if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
 }
 window.toggleRecebidoTerceiro = toggleRecebidoTerceiro;
@@ -814,13 +827,12 @@ function renderTerceirosTab() {
     if (cardCont) cardCont.style.display = 'none';
   }
 
-  const _recebidos = _getRecebidosTerceiro();
   tbody.innerHTML = sorted.map(l => {
     const sid = String(l.id).replace(/'/g,"\\'");
     const isRec = l.tipo==='receita';
     const catLabel = l.categoria || '—';
     const isDivida = l.categoria === 'Dividas de terceiros';
-    const isReceb  = isDivida && _recebidos.has(String(l.id));
+    const isReceb  = isDivida && _isRecebidoTerceiro(l);
     return `<tr${isReceb ? ' style="background:rgba(34,197,94,0.06)"' : ''}>
       <td style="padding:8px 6px;text-align:center"><input type="checkbox" class="terc-check" data-id="${l.id}" onchange="tercUpdateBulkBar()" style="cursor:pointer;accent-color:var(--accent)"></td>
       <td style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--text2)">${(function(){
