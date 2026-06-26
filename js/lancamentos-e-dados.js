@@ -408,26 +408,26 @@ function renderTerceirosTab() {
   const resumoEl = document.getElementById('tercResumoCards');
   if (resumoEl) {
     const todosTerc = loadDataBanco().filter(l => CAT_TERC_SET.has(l.categoria) && _inRange(l));
-    const totalEnt  = todosTerc.filter(l=>l.categoria==='Entrada Terceiro').reduce((s,l)=>s+_valorExib(l),0);
-    const totalDiv  = todosTerc.filter(l=>l.categoria==='Dividas de terceiros').reduce((s,l)=>s+_valorExib(l),0);
-    const saldoTerc = totalEnt - totalDiv;
-    const pendEnt   = todosTerc.filter(l=>l.categoria==='Entrada Terceiro'&&l.status==='pendente').reduce((s,l)=>s+_valorExib(l),0);
-    const pendDiv   = todosTerc.filter(l=>l.categoria==='Dividas de terceiros'&&l.status==='pendente').reduce((s,l)=>s+_valorExib(l),0);
+    const divsTerc      = todosTerc.filter(l=>l.categoria==='Dividas de terceiros');
+    const totalReceb    = divsTerc.filter(l=>_isRecebidoTerceiro(l)).reduce((s,l)=>s+_valorExib(l),0);
+    const totalPago     = divsTerc.filter(l=>l.status==='pago').reduce((s,l)=>s+_valorExib(l),0);
+    const totalAReceber = divsTerc.filter(l=>!_isRecebidoTerceiro(l)).reduce((s,l)=>s+_valorExib(l),0);
+    const temAReceber   = totalAReceber > 0.005;
     resumoEl.innerHTML = `
-      <div class="card sm" style="border-top:3px solid #f59e0b;border-color:rgba(245,158,11,0.35)">
-        <div class="card-header"><span class="card-label" style="color:#f59e0b">↑ Entrada Terceiro</span><span style="font-size:1rem">🤝</span></div>
-        <div class="card-value" style="color:#f59e0b">${fmt(totalEnt)}</div>
-        <div class="card-footer"><span class="card-sub">${todosTerc.filter(l=>l.categoria==='Entrada Terceiro').length} entradas</span><span class="card-sub" style="color:var(--muted)">fora orç.</span></div>
+      <div class="card sm" style="border-top:3px solid #22c55e;border-color:rgba(34,197,94,0.35)">
+        <div class="card-header"><span class="card-label" style="color:#22c55e">↩ Recebido</span><span style="font-size:1rem">💰</span></div>
+        <div class="card-value" style="color:var(--green)">${fmt(totalReceb)}</div>
+        <div class="card-footer"><span class="card-sub">terceiro enviou</span><span class="card-sub" style="color:var(--muted)">fora orç.</span></div>
       </div>
-      <div class="card sm" style="border-top:3px solid #f59e0b;border-color:rgba(245,158,11,0.35)">
-        <div class="card-header"><span class="card-label" style="color:#f59e0b">↓ Dívidas Terceiros</span><span style="font-size:1rem">🗑️</span></div>
-        <div class="card-value" style="color:#f59e0b">${fmt(totalDiv)}</div>
-        <div class="card-footer"><span class="card-sub">${todosTerc.filter(l=>l.categoria==='Dividas de terceiros').length} saídas</span><span class="card-sub" style="color:var(--muted)">fora orç.</span></div>
+      <div class="card sm" style="border-top:3px solid #94a3b8;border-color:rgba(148,163,184,0.35)">
+        <div class="card-header"><span class="card-label" style="color:#94a3b8">✓ Pago</span><span style="font-size:1rem">💸</span></div>
+        <div class="card-value" style="color:var(--text2)">${fmt(totalPago)}</div>
+        <div class="card-footer"><span class="card-sub">você pagou</span><span class="card-sub" style="color:var(--muted)">fora orç.</span></div>
       </div>
-      <div class="card sm" style="border-top:3px solid ${saldoTerc>=0?'#22c55e':'#ef4444'};border-color:${saldoTerc>=0?'rgba(34,197,94,0.35)':'rgba(239,68,68,0.35)'}">
-        <div class="card-header"><span class="card-label" style="color:${saldoTerc>=0?'#22c55e':'#ef4444'}">⇌ Saldo Terceiros</span><span style="font-size:1rem">⚖️</span></div>
-        <div class="card-value" style="color:${saldoTerc>=0?'var(--green)':'var(--red)'}">${saldoTerc>=0?'+':''}${fmt(saldoTerc)}</div>
-        <div class="card-footer"><span class="card-sub">Ent − Dív</span></div>
+      <div class="card sm" style="border-top:3px solid ${temAReceber?'#f59e0b':'#22c55e'};border-color:${temAReceber?'rgba(245,158,11,0.35)':'rgba(34,197,94,0.35)'}">
+        <div class="card-header"><span class="card-label" style="color:${temAReceber?'#f59e0b':'#22c55e'}">⏳ Saldo a Receber</span><span style="font-size:1rem">⚖️</span></div>
+        <div class="card-value" style="color:${temAReceber?'#f59e0b':'var(--green)'}">${fmt(totalAReceber)}</div>
+        <div class="card-footer"><span class="card-sub">falta o terceiro enviar</span></div>
       </div>`;
   }
 
@@ -586,26 +586,18 @@ function renderTerceirosTab() {
             <span style="font-size:0.72rem;font-weight:700;color:var(--text)">👤 ${nome}</span>
             ${tipoLabel?`<span style="font-size:0.58rem;color:${tipoC};background:rgba(0,0,0,0.2);padding:1px 6px;border-radius:10px">${tipoLabel}</span>`:''}
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 8px">
-            <span style="font-size:0.55rem;color:#ef4444;letter-spacing:.06em">DÍVIDAS · investido</span>
-            <span style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:var(--red)">${fmt(v.div)}</span>
+          <div style="margin:2px 0 9px">
+            <div style="font-size:0.5rem;color:${v.aReceberDiv>0.005?'#f59e0b':'#22c55e'};letter-spacing:.06em;margin-bottom:1px">⏳ SALDO A RECEBER</div>
+            <div style="font-family:var(--font-mono);font-size:1.1rem;font-weight:700;color:${v.aReceberDiv>0.005?'#f59e0b':'var(--green)'}">${fmt(v.aReceberDiv)}</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
-            <div style="background:rgba(255,255,255,0.03);border-radius:6px;padding:5px 8px">
-              <div style="font-size:0.5rem;color:var(--muted);letter-spacing:.06em;margin-bottom:2px">✓ PAGUEI</div>
-              <div style="font-size:0.74rem;font-weight:700;color:var(--text2);font-family:var(--font-mono)">${fmt(v.pagoDiv)}</div>
-            </div>
-            <div style="background:rgba(251,146,60,0.08);border-radius:6px;padding:5px 8px">
-              <div style="font-size:0.5rem;color:#fb923c;letter-spacing:.06em;margin-bottom:2px">⌛ A PAGAR</div>
-              <div style="font-size:0.74rem;font-weight:700;color:#fb923c;font-family:var(--font-mono)">${fmt(v.pendDiv)}</div>
-            </div>
             <div style="background:rgba(34,197,94,0.08);border-radius:6px;padding:5px 8px">
               <div style="font-size:0.5rem;color:#22c55e;letter-spacing:.06em;margin-bottom:2px">↩ RECEBIDO</div>
               <div style="font-size:0.74rem;font-weight:700;color:var(--green);font-family:var(--font-mono)">${fmt(v.recebDiv)}</div>
             </div>
-            <div style="background:rgba(245,158,11,0.1);border-radius:6px;padding:5px 8px">
-              <div style="font-size:0.5rem;color:#f59e0b;letter-spacing:.06em;margin-bottom:2px">⏳ A RECEBER</div>
-              <div style="font-size:0.74rem;font-weight:700;color:#f59e0b;font-family:var(--font-mono)">${fmt(v.aReceberDiv)}</div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:6px;padding:5px 8px">
+              <div style="font-size:0.5rem;color:var(--muted);letter-spacing:.06em;margin-bottom:2px">✓ PAGO</div>
+              <div style="font-size:0.74rem;font-weight:700;color:var(--text2);font-family:var(--font-mono)">${fmt(v.pagoDiv)}</div>
             </div>
           </div>
           ${isActive ? `<div style="display:flex;gap:4px;border-top:1px solid var(--border);padding-top:7px" onclick="event.stopPropagation()">
