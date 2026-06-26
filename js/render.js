@@ -1678,6 +1678,26 @@ function sortItems(items) {
   });
 }
 
+// ── Toggle "Considerar terceiros?" (tela de Lançamentos) ──────────────────────
+function _considerarTerceiros() {
+  return localStorage.getItem('mf_considerar_terceiros') !== '0'; // default: considera
+}
+function _updateBtnConsiderarTerceiros() {
+  var b = document.getElementById('btnConsiderarTerceiros');
+  if (!b) return;
+  var on = _considerarTerceiros();
+  b.innerHTML = on ? '👥 Terceiros: incluídos' : '👥 Terceiros: ocultos';
+  b.style.background = on ? 'rgba(34,197,94,0.10)' : 'var(--surface2)';
+  b.style.border     = on ? '1px solid rgba(34,197,94,0.45)' : '1px solid var(--border)';
+  b.style.color      = on ? '#22c55e' : 'var(--muted)';
+}
+function toggleConsiderarTerceiros() {
+  localStorage.setItem('mf_considerar_terceiros', _considerarTerceiros() ? '0' : '1');
+  _updateBtnConsiderarTerceiros();
+  if (typeof renderAllTable === 'function') renderAllTable();
+}
+window.toggleConsiderarTerceiros = toggleConsiderarTerceiros;
+
 function renderAllTable() {
   const all = getMonthData();
   const tipo      = window.FSEL ? FSEL.getValues('filtroTipo')          : [];
@@ -1716,6 +1736,8 @@ function renderAllTable() {
   }
 
   let filtered = all.filter(l => {
+    // Toggle "Considerar terceiros?" — quando desligado, oculta as Dívidas de terceiros desta lista (e dos totais derivados dela)
+    if (!_considerarTerceiros() && l.categoria === 'Dividas de terceiros') return false;
     if (tipo.length      && !tipo.includes(l.tipo)) return false;
     if (status.length    && !status.includes(l.status)) return false;
     if (cat.length) {
@@ -1812,6 +1834,8 @@ function renderAllTable() {
   var hasFilter = (busca.length > 0) || tipo.length || status.length || cat.length || subCat.length || tipoLanc.length || pagFiltro.length || tercFiltro.length;
   var btnClr = document.getElementById('btnClearLancFiltros');
   if (btnClr) btnClr.style.display = hasFilter ? 'inline-block' : 'none';
+
+  _updateBtnConsiderarTerceiros();
 }
 
 
