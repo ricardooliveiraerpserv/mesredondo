@@ -565,17 +565,15 @@ function renderTerceirosTab() {
     });
 
     const entries = Object.entries(byTerc)
-      .sort((a,b) => (b[1].ent - b[1].div) - (a[1].ent - a[1].div));
+      .sort((a,b) => (b[1].aReceberDiv - a[1].aReceberDiv) || (b[1].div - a[1].div));
 
     if (!entries.length) {
       cardsEl.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:12px">Nenhum lançamento de terceiros neste mês.</div>';
     } else {
       cardsEl.innerHTML = entries.map(([nome, v]) => {
-        const saldo = v.ent - v.div;
-        const positivo = saldo >= 0;
-        const borderC = positivo ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
-        const topC    = positivo ? '#22c55e' : '#ef4444';
-        const saldoC  = positivo ? 'var(--green)' : 'var(--red)';
+        const liquidado = v.recebDiv > 0 && v.aReceberDiv < 0.005;  // terceiro já enviou tudo
+        const borderC = liquidado ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+        const topC    = liquidado ? '#22c55e' : '#ef4444';
         const terc    = terceiros.find(t => t.nome === nome);
         const tipoLabel = terc ? (terc.tipo==='devedor'?'Me deve':terc.tipo==='credor'?'Devo a ele':'Ambos') : '';
         const tipoC   = terc?.tipo==='devedor'?'#22c55e':terc?.tipo==='credor'?'#ef4444':'#94a3b8';
@@ -588,22 +586,27 @@ function renderTerceirosTab() {
             <span style="font-size:0.72rem;font-weight:700;color:var(--text)">👤 ${nome}</span>
             ${tipoLabel?`<span style="font-size:0.58rem;color:${tipoC};background:rgba(0,0,0,0.2);padding:1px 6px;border-radius:10px">${tipoLabel}</span>`:''}
           </div>
-          <div style="font-family:var(--font-mono);font-size:0.95rem;font-weight:700;color:${saldoC};margin-bottom:6px">${positivo?'+':'-'}${fmt(Math.abs(saldo))}</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">
-            ${v.ent>0?`<div style="background:rgba(34,197,94,0.08);border-radius:5px;padding:4px 6px">
-              <div style="font-size:0.52rem;color:#22c55e;margin-bottom:2px;letter-spacing:.04em">ENTRADAS</div>
-              <div style="font-size:0.68rem;font-weight:700;color:var(--green);font-family:var(--font-mono)">${fmt(v.ent)}</div>
-              ${v.pagoEnt>0?`<div style="font-size:0.55rem;color:var(--muted)">✓ pago ${fmt(v.pagoEnt)}</div>`:''}
-              ${v.pendEnt>0?`<div style="font-size:0.55rem;color:#f59e0b">⏳ pend. ${fmt(v.pendEnt)}</div>`:''}
-            </div>`:'<div></div>'}
-            ${v.div>0?`<div style="background:rgba(239,68,68,0.08);border-radius:5px;padding:4px 6px">
-              <div style="font-size:0.52rem;color:#ef4444;margin-bottom:2px;letter-spacing:.04em">DÍVIDAS</div>
-              <div style="font-size:0.68rem;font-weight:700;color:var(--red);font-family:var(--font-mono)">${fmt(v.div)}</div>
-              ${v.pagoDiv>0?`<div style="font-size:0.55rem;color:var(--muted)">✓ paguei ${fmt(v.pagoDiv)}</div>`:''}
-              ${v.pendDiv>0?`<div style="font-size:0.55rem;color:#fb923c">⌛ a pagar ${fmt(v.pendDiv)}</div>`:''}
-              ${v.recebDiv>0?`<div style="font-size:0.55rem;color:#22c55e">↩ recebido ${fmt(v.recebDiv)}</div>`:''}
-              ${v.aReceberDiv>0?`<div style="font-size:0.55rem;color:#f59e0b">⏳ a receber ${fmt(v.aReceberDiv)}</div>`:''}
-            </div>`:'<div></div>'}
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 0 8px">
+            <span style="font-size:0.55rem;color:#ef4444;letter-spacing:.06em">DÍVIDAS · investido</span>
+            <span style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:var(--red)">${fmt(v.div)}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+            <div style="background:rgba(255,255,255,0.03);border-radius:6px;padding:5px 8px">
+              <div style="font-size:0.5rem;color:var(--muted);letter-spacing:.06em;margin-bottom:2px">✓ PAGUEI</div>
+              <div style="font-size:0.74rem;font-weight:700;color:var(--text2);font-family:var(--font-mono)">${fmt(v.pagoDiv)}</div>
+            </div>
+            <div style="background:rgba(251,146,60,0.08);border-radius:6px;padding:5px 8px">
+              <div style="font-size:0.5rem;color:#fb923c;letter-spacing:.06em;margin-bottom:2px">⌛ A PAGAR</div>
+              <div style="font-size:0.74rem;font-weight:700;color:#fb923c;font-family:var(--font-mono)">${fmt(v.pendDiv)}</div>
+            </div>
+            <div style="background:rgba(34,197,94,0.08);border-radius:6px;padding:5px 8px">
+              <div style="font-size:0.5rem;color:#22c55e;letter-spacing:.06em;margin-bottom:2px">↩ RECEBIDO</div>
+              <div style="font-size:0.74rem;font-weight:700;color:var(--green);font-family:var(--font-mono)">${fmt(v.recebDiv)}</div>
+            </div>
+            <div style="background:rgba(245,158,11,0.1);border-radius:6px;padding:5px 8px">
+              <div style="font-size:0.5rem;color:#f59e0b;letter-spacing:.06em;margin-bottom:2px">⏳ A RECEBER</div>
+              <div style="font-size:0.74rem;font-weight:700;color:#f59e0b;font-family:var(--font-mono)">${fmt(v.aReceberDiv)}</div>
+            </div>
           </div>
           ${isActive ? `<div style="display:flex;gap:4px;border-top:1px solid var(--border);padding-top:7px" onclick="event.stopPropagation()">
             <button onclick="_tercCardTipo('${nome.replace(/'/g,"\\'")}','todos')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeTipo==='todos'?topC:'var(--border)'};background:${activeTipo==='todos'?topC+'22':'transparent'};color:${activeTipo==='todos'?topC:'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Todos</button>
