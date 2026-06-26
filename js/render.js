@@ -1798,6 +1798,10 @@ function renderAllTable() {
     return true;
   });
 
+  // Base dos cards de pendentes: já tem os filtros da página (dropdowns/busca/terceiros),
+  // mas NÃO o filtro rápido de status (Todos/Pendente/Pago) — os cards são sempre "pendentes".
+  var baseCards = filtered.slice();
+
   // Filtro rápido de status por botões (Todos/Pendente/Pago/Atrasado)
   filtered = window._applyStatusQuick(filtered, window._lancStatusQuick);
 
@@ -1832,21 +1836,18 @@ function renderAllTable() {
   (function _renderLancPendentes() {
     var cont = document.getElementById('lancPendentesCards');
     if (!cont) return;
-    // Reflete os toggles de terceiros (Transferência fica sempre fora).
-    var pend = all.filter(function(l) {
+    // Segue os filtros da página (baseCards) — só pendentes; Transferência sempre fora.
+    // (toggles de terceiros já aplicados em baseCards)
+    var pend = baseCards.filter(function(l) {
       if (l.status === 'pago') return false;
       if ((l.categoria || '') === 'Transferência') return false;
-      var isDiv = l.categoria === 'Dividas de terceiros';
-      var isEnt = l.categoria === 'Entrada Terceiro';
-      if (_soTerceiros()) return isDiv;
-      if (!_considerarTerceiros() && (isDiv || isEnt)) return false;
       return true;
     });
     var recItens  = pend.filter(function(l) { return l.tipo === 'receita'; });
     var despItens = pend.filter(function(l) { return l.tipo === 'despesa'; });
-    var recPend  = recItens.reduce(function(s, l) { return s + (l.valor || 0); }, 0);
-    var despPend = despItens.reduce(function(s, l) { return s + (l.valor || 0); }, 0);
-    var vencDesp = despItens.filter(function(l) { return window._isVencidoStatus(l); }).reduce(function(s, l) { return s + (l.valor || 0); }, 0);
+    var recPend  = recItens.reduce(function(s, l) { return s + _valorExib(l); }, 0);
+    var despPend = despItens.reduce(function(s, l) { return s + _valorExib(l); }, 0);
+    var vencDesp = despItens.filter(function(l) { return window._isVencidoStatus(l); }).reduce(function(s, l) { return s + _valorExib(l); }, 0);
     var quickPend = window._lancStatusQuick === 'pendente';
     function card(cor, icone, label, valor, qtd, sub) {
       return '<div class="card sm" style="border-top:3px solid ' + cor + ';cursor:pointer;' + (quickPend ? 'box-shadow:0 0 0 2px ' + cor + ';' : '') + '" onclick="_setLancStatus(\'pendente\')" title="Filtrar pendentes">'
