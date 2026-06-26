@@ -336,10 +336,17 @@ function toggleRecebidoTerceiro(id) {
   _saveRecebidosTerceiro(s);
   // 2) memória + Supabase — sincroniza entre dispositivos (precisa da coluna `recebido`)
   if (lanc) lanc.recebido = novo;
+  // update otimista no cache (mesmo padrão do toggleStatusLanc) p/ o saldo recalcular na hora
+  if (typeof _memCache === 'object' && _memCache && Array.isArray(_memCache.lancamentos)) {
+    _memCache.lancamentos = _memCache.lancamentos.map(function(l){ return String(l.id)===id ? Object.assign({}, l, { recebido: novo }) : l; });
+  }
   if (typeof dbUpdateLancamento === 'function') {
     try { dbUpdateLancamento(id, { recebido: novo }); } catch (e) {}
   }
-  if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
+  // "Terceiro enviou" agora MOVE o saldo do banco — atualiza aba + card de saldo
+  if (typeof _rerenderActiveView === 'function') _rerenderActiveView();
+  else if (typeof renderTerceirosTab === 'function') renderTerceirosTab();
+  if (typeof renderSaldoBanco === 'function') renderSaldoBanco();
 }
 window.toggleRecebidoTerceiro = toggleRecebidoTerceiro;
 
@@ -542,7 +549,7 @@ function renderTerceirosTab() {
     const _inMesFiltrado = l => _inRange(l);
     all.filter(l => l.terceiro && _inMesFiltrado(l)).forEach(l => {
       const k = l.terceiro;
-      if (!byTerc[k]) byTerc[k] = { ent:0, div:0, pendEnt:0, pendDiv:0, pagoEnt:0, pagoDiv:0 };
+      if (!byTerc[k]) byTerc[k] = { ent:0, div:0, pendEnt:0, pendDiv:0, pagoEnt:0, pagoDiv:0, recebDiv:0, aReceberDiv:0 };
       if (l.categoria === 'Entrada Terceiro') {
         byTerc[k].ent += _valorExib(l);
         if (l.status === 'pendente') byTerc[k].pendEnt += _valorExib(l);
@@ -551,6 +558,9 @@ function renderTerceirosTab() {
         byTerc[k].div += _valorExib(l);
         if (l.status === 'pendente') byTerc[k].pendDiv += _valorExib(l);
         else byTerc[k].pagoDiv += _valorExib(l);
+        // Recebimento do terceiro (flag "terceiro enviou"): recebido vs a receber
+        if (_isRecebidoTerceiro(l)) byTerc[k].recebDiv += _valorExib(l);
+        else byTerc[k].aReceberDiv += _valorExib(l);
       }
     });
 
@@ -589,8 +599,10 @@ function renderTerceirosTab() {
             ${v.div>0?`<div style="background:rgba(239,68,68,0.08);border-radius:5px;padding:4px 6px">
               <div style="font-size:0.52rem;color:#ef4444;margin-bottom:2px;letter-spacing:.04em">DÍVIDAS</div>
               <div style="font-size:0.68rem;font-weight:700;color:var(--red);font-family:var(--font-mono)">${fmt(v.div)}</div>
-              ${v.pagoDiv>0?`<div style="font-size:0.55rem;color:var(--muted)">✓ pago ${fmt(v.pagoDiv)}</div>`:''}
-              ${v.pendDiv>0?`<div style="font-size:0.55rem;color:#f59e0b">⏳ pend. ${fmt(v.pendDiv)}</div>`:''}
+              ${v.pagoDiv>0?`<div style="font-size:0.55rem;color:var(--muted)">✓ paguei ${fmt(v.pagoDiv)}</div>`:''}
+              ${v.pendDiv>0?`<div style="font-size:0.55rem;color:#fb923c">⌛ a pagar ${fmt(v.pendDiv)}</div>`:''}
+              ${v.recebDiv>0?`<div style="font-size:0.55rem;color:#22c55e">↩ recebido ${fmt(v.recebDiv)}</div>`:''}
+              ${v.aReceberDiv>0?`<div style="font-size:0.55rem;color:#f59e0b">⏳ a receber ${fmt(v.aReceberDiv)}</div>`:''}
             </div>`:'<div></div>'}
           </div>
           ${isActive ? `<div style="display:flex;gap:4px;border-top:1px solid var(--border);padding-top:7px" onclick="event.stopPropagation()">
@@ -851,9 +863,9 @@ function renderTerceirosTab() {
       <td style="font-size:0.68rem">${(()=>{const b=loadBancos().find(x=>x.id===l.banco);return b?`<span style="color:${b.cor}">${b.icone||'🏦'} ${b.nome}</span>`:'—';})()}</td>
       <td style="text-align:right"><span class="${isRec?'val-pos':'val-neg'}">${isRec?'+':'-'}${fmt(_valorExib(l))}</span></td>
       <td style="text-align:center;white-space:nowrap">
-        ${isDivida ? `<button class="del-btn" onclick="toggleRecebidoTerceiro('${sid}')" title="${isReceb?'Desmarcar — o terceiro ainda não pagou':'Marcar que o terceiro te pagou de volta (só controle, não mexe no saldo)'}" style="color:${isReceb?'#22c55e':'var(--muted)'};background:${isReceb?'rgba(34,197,94,0.15)':'rgba(255,255,255,0.04)'};border:1px solid ${isReceb?'rgba(34,197,94,0.4)':'var(--border)'};border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">${isReceb?'✓ Recebido':'Receber'}</button>` : ''}
+        ${isDivida ? `<button class="del-btn" onclick="toggleRecebidoTerceiro('${sid}')" title="${isReceb?'Desmarcar — o terceiro não enviou o dinheiro (retira do saldo do banco)':'Marcar que o terceiro enviou o dinheiro (entra no saldo do banco)'}" style="color:${isReceb?'#22c55e':'var(--muted)'};background:${isReceb?'rgba(34,197,94,0.15)':'rgba(255,255,255,0.04)'};border:1px solid ${isReceb?'rgba(34,197,94,0.4)':'var(--border)'};border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">${isReceb?'✓ Terceiro enviou':'Terceiro enviou'}</button>` : ''}
         ${l.status==='pendente'
-          ? `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pago')" title="Marcar como pago" style="color:var(--green);background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">${l.tipo === 'receita' ? '✓ Receber' : '✓ Pagar'}</button>`
+          ? `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pago')" title="${isDivida ? 'Marcar que eu paguei (sai do saldo do banco)' : 'Marcar como pago'}" style="color:var(--green);background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">${isDivida ? '✓ Eu paguei' : (l.tipo === 'receita' ? '✓ Receber' : '✓ Pagar')}</button>`
           : `<button class="del-btn" onclick="toggleStatusLanc('${sid}','pendente')" title="Estornar para pendente" style="color:var(--danger);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:700;margin-right:3px">↩</button>`}
         <button class="del-btn" onclick="editLancamento('${sid}')" style="color:var(--accent2)">✎</button>
         <button class="del-btn" onclick="smartDelete(this)" data-sid="${sid}" data-gid="${l.groupId||''}" title="Excluir" style="color:var(--danger)">✕</button>
@@ -1218,12 +1230,15 @@ function calcSaldoBanco() {
       const today = new Date(); today.setHours(23,59,59,0);
       let soma=0, countPos=0, countNeg=0;
       (loadData()).forEach(l => {
-        if (l.status!=='pago') return;
+        const _recebDiv = (l.categoria === 'Dividas de terceiros' && _isRecebidoTerceiro(l));
+        if (l.status!=='pago' && !_recebDiv) return;
         const ds=l.data||''; let ld;
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(ds)){const p=ds.split('/');ld=new Date(p[2]+'-'+p[1]+'-'+p[0]+'T00:00:00');}
         else if (/^\d{4}-\d{2}-\d{2}$/.test(ds)){ld=new Date(ds+'T00:00:00');}else return;
         if (isNaN(ld)||ld.getTime()<refTs||ld.getTime()>today.getTime()) return;
-        if (l.tipo==='receita'){soma+=_valorExib(l);countPos++;}else{soma-=_valorExib(l);countNeg++;}
+        // "Terceiro enviou o dinheiro": credita o banco, independente do status de pagamento.
+        if (_recebDiv){soma+=_valorExib(l);countPos++;}
+        if (l.status==='pago'){ if (l.tipo==='receita'){soma+=_valorExib(l);countPos++;}else{soma-=_valorExib(l);countNeg++;} }
       });
       const refLabel = refData.includes('-') ? refData.split('-').reverse().join('/') : refData;
       return { saldo: valor+soma, soma, countPos, countNeg, saldoInicial: valor, refLabel };
@@ -1237,6 +1252,8 @@ function calcSaldoBanco() {
       let rec = 0, desp = 0;
       todos.forEach(l => {
         if (l.banco !== b.id) return;
+        // "Terceiro enviou o dinheiro": credita o banco, independente de eu ter pago a dívida.
+        if (l.categoria === 'Dividas de terceiros' && _isRecebidoTerceiro(l)) { rec += _valorExib(l)||0; countPos++; }
         if (l.status !== 'pago') return;
         if (l.tipo==='receita'){rec+=_valorExib(l)||0;countPos++;}else{desp+=_valorExib(l)||0;countNeg++;}
       });
