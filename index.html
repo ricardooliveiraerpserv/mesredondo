@@ -887,6 +887,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">
           <button id="btnConsiderarTerceiros" class="btn" onclick="toggleConsiderarTerceiros()" title="Incluir ou ocultar os lançamentos de Dívida de terceiros nesta lista e nos totais">👥 Terceiros</button>
+          <button id="btnSoTerceiros" class="btn" onclick="toggleSoTerceiros()" title="Mostrar SOMENTE os lançamentos de Dívida de terceiros">👥 Só terceiros</button>
           <button class="btn desktop-only" style="background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,0.35);color:var(--accent)" onclick="downloadTemplateImportacao()" title="Baixar planilha modelo com suas categorias, pagamentos e terceiros">⬇ Planilha Modelo</button>
           <button class="btn desktop-only" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent2)" onclick="openImportModal()">⬆ Importar Fatura</button>
           <button class="btn desktop-only" style="background:var(--surface2);border:1px solid rgba(34,197,94,0.5);color:#22c55e" onclick="exportarExcel()">📊 Exportar Excel</button>
@@ -2982,7 +2983,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 
 <!-- 4. UI: navigation DEVE vir ANTES de render.js -->
 <script src="js/navigation.js?v=202604052000"></script>
-<script src="js/render.js?v=202606261007"></script>
+<script src="js/render.js?v=202606261018"></script>
 <script src="js/vencimentos.js?v=202604052000"></script>
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>

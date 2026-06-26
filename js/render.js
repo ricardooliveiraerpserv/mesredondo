@@ -1698,6 +1698,25 @@ function toggleConsiderarTerceiros() {
 }
 window.toggleConsiderarTerceiros = toggleConsiderarTerceiros;
 
+function _soTerceiros() {
+  return localStorage.getItem('mf_so_terceiros') === '1'; // default: off
+}
+function _updateBtnSoTerceiros() {
+  var b = document.getElementById('btnSoTerceiros');
+  if (!b) return;
+  var on = _soTerceiros();
+  b.innerHTML = on ? '👥 Só terceiros: ON' : '👥 Só terceiros';
+  b.style.background = on ? 'rgba(245,158,11,0.12)' : 'var(--surface2)';
+  b.style.border     = on ? '1px solid rgba(245,158,11,0.5)' : '1px solid var(--border)';
+  b.style.color      = on ? '#f59e0b' : 'var(--muted)';
+}
+function toggleSoTerceiros() {
+  localStorage.setItem('mf_so_terceiros', _soTerceiros() ? '0' : '1');
+  _updateBtnSoTerceiros();
+  if (typeof renderAllTable === 'function') renderAllTable();
+}
+window.toggleSoTerceiros = toggleSoTerceiros;
+
 function renderAllTable() {
   const all = getMonthData();
   const tipo      = window.FSEL ? FSEL.getValues('filtroTipo')          : [];
@@ -1736,8 +1755,10 @@ function renderAllTable() {
   }
 
   let filtered = all.filter(l => {
-    // Toggle "Considerar terceiros?" — quando desligado, oculta as Dívidas de terceiros desta lista (e dos totais derivados dela)
-    if (!_considerarTerceiros() && l.categoria === 'Dividas de terceiros') return false;
+    // Toggles de terceiros: "Só terceiros" tem precedência sobre "Considerar terceiros".
+    var _isDivTerc = l.categoria === 'Dividas de terceiros';
+    if (_soTerceiros()) { if (!_isDivTerc) return false; }
+    else if (!_considerarTerceiros() && _isDivTerc) return false;
     if (tipo.length      && !tipo.includes(l.tipo)) return false;
     if (status.length    && !status.includes(l.status)) return false;
     if (cat.length) {
@@ -1811,8 +1832,16 @@ function renderAllTable() {
   (function _renderLancPendentes() {
     var cont = document.getElementById('lancPendentesCards');
     if (!cont) return;
-    var EXCL = ['Entrada Terceiro', 'Dividas de terceiros', 'Transferência'];
-    var pend = all.filter(function(l) { return l.status !== 'pago' && EXCL.indexOf(l.categoria || '') < 0; });
+    // Reflete os toggles de terceiros (Transferência fica sempre fora).
+    var pend = all.filter(function(l) {
+      if (l.status === 'pago') return false;
+      if ((l.categoria || '') === 'Transferência') return false;
+      var isDiv = l.categoria === 'Dividas de terceiros';
+      var isEnt = l.categoria === 'Entrada Terceiro';
+      if (_soTerceiros()) return isDiv;
+      if (!_considerarTerceiros() && (isDiv || isEnt)) return false;
+      return true;
+    });
     var recItens  = pend.filter(function(l) { return l.tipo === 'receita'; });
     var despItens = pend.filter(function(l) { return l.tipo === 'despesa'; });
     var recPend  = recItens.reduce(function(s, l) { return s + (l.valor || 0); }, 0);
@@ -1825,9 +1854,15 @@ function renderAllTable() {
         + '<div class="card-value" style="color:' + cor + '">' + valor + '</div>'
         + '<div class="card-footer"><span class="card-sub">' + qtd + (sub ? ' · ' + sub : '') + '</span></div></div>';
     }
+    var resultado = recPend - despPend;
+    var resCor = resultado >= 0 ? 'var(--green)' : 'var(--red)';
     cont.innerHTML =
       card('var(--green)', '📥', 'Recebimentos pendentes', '+' + fmt(recPend), recItens.length + ' a receber', '') +
-      card('var(--red)',   '📤', 'Pagamentos pendentes',   '-' + fmt(despPend), despItens.length + ' a pagar', vencDesp > 0 ? ('🔴 ' + fmt(vencDesp) + ' vencido') : '');
+      card('var(--red)',   '📤', 'Pagamentos pendentes',   '-' + fmt(despPend), despItens.length + ' a pagar', vencDesp > 0 ? ('🔴 ' + fmt(vencDesp) + ' vencido') : '') +
+      '<div class="card sm" style="border-top:3px solid ' + resCor + '">'
+        + '<div class="card-header"><span class="card-label" style="color:' + resCor + '">⚖️ Resultado</span></div>'
+        + '<div class="card-value" style="color:' + resCor + '">' + (resultado >= 0 ? '+' : '-') + fmt(Math.abs(resultado)) + '</div>'
+        + '<div class="card-footer"><span class="card-sub">recebimentos − pagamentos</span></div></div>';
   })();
 
   // Mostra/esconde botão limpar filtros
@@ -1836,6 +1871,7 @@ function renderAllTable() {
   if (btnClr) btnClr.style.display = hasFilter ? 'inline-block' : 'none';
 
   _updateBtnConsiderarTerceiros();
+  _updateBtnSoTerceiros();
 }
 
 
