@@ -345,6 +345,7 @@ function showTab(tab, btn) {
   if (tab === 'parcelados') renderParceladosTab();
   if (tab === 'vencimentos') renderVencimentosTab();
   if (tab === 'cartoes')    renderCartoesTab();
+  if (tab === 'guerra')     renderGuerraTab();
   if (tab === 'areceber')   renderAReceberTab();
   if (tab === 'apagar')     renderAPagarTab();
   if (tab === 'config') { renderConfigTab(); renderCatTab(); renderTerceiroList(); renderPagList(); renderBancoList(); populateBancoSelects(); }

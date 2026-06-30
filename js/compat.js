@@ -391,6 +391,7 @@ window.carregarApp = async function() {
       if (_tab === 'parcelados'  && typeof renderParceladosTab === 'function') renderParceladosTab();
       if (_tab === 'vencimentos' && typeof renderVencimentosTab=== 'function') renderVencimentosTab();
       if (_tab === 'cartoes'     && typeof renderCartoesTab    === 'function') renderCartoesTab();
+      if (_tab === 'guerra'      && typeof renderGuerraTab     === 'function') renderGuerraTab();
     } catch(e) {}
   } catch(e) {
     console.error('[carregarApp] erro:', e.message);

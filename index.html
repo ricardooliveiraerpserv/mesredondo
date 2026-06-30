@@ -70,6 +70,7 @@ if ('serviceWorker' in navigator) {
     <button class="sidebar-tab" onclick="sidebarShowTab('parcelados', this)">🗓 Parcelados</button>
     <button class="sidebar-tab" onclick="sidebarShowTab('vencimentos', this)">⚠️ Vencimentos</button>
     <button class="sidebar-tab" onclick="sidebarShowTab('cartoes', this)">💳 Cartões</button>
+    <button class="sidebar-tab" onclick="sidebarShowTab('guerra', this)">⚔️ Guerra</button>
     <button class="sidebar-tab" onclick="sidebarShowTab('config', this)">⚙️ Config</button>
   </div>
   <!-- Ações de conta no sidebar (visíveis no mobile) -->
@@ -528,6 +529,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
       <button class="nav-tab" onclick="showTab('parcelados', this)">🗓 Parcelados</button>
       <button class="nav-tab" onclick="showTab('vencimentos', this)">⚠️ Vencimentos</button>
       <button class="nav-tab" onclick="showTab('cartoes', this)">💳 Cartões</button>
+      <button class="nav-tab" onclick="showTab('guerra', this)">⚔️ Guerra</button>
       <button class="nav-tab" onclick="showTab('config', this)">⚙️ Config</button>
     </div>
   </div>
@@ -1564,6 +1566,10 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
         </table>
       </div>
     </div>
+  </div>
+
+  <div class="tab-content" id="tab-guerra">
+    <div id="guerraContent"></div>
   </div>
 
   <div class="tab-content" id="tab-cartoes">
@@ -2988,6 +2994,7 @@ CREATE POLICY "backup_owner" ON meufinanceiro_backup
 <script src="js/parcelados.js?v=202605291904"></script>
 <script src="js/areceber-apagar.js?v=202605211230"></script>
     <script src="js/cartoes-config.js?v=202606301200"></script>
+    <script src="js/guerra.js?v=202606301600"></script>
 
 <!-- 5. FSEL por último (define _initApp, chamado após login) -->
 <script src="js/fsel.js?v=202606301545"></script>
