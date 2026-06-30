@@ -114,16 +114,15 @@ function renderCartoesTab() {
   };
 
   // All lancamentos that use a cartao pagamento in current month
-  // Para cartões: usa l.mes/l.ano (mês da fatura), não o vencimento do boleto
-  // Espelhos "Entrada Terceiro" herdam o pagamento da despesa original — não
-  // são gastos reais do cartão. Filtramos pela categoria porque _espelhoDe
-  // não é persistido no Supabase (não está no _lancToDbRow), então só está
-  // presente na sessão da criação. A categoria 'Entrada Terceiro' é a
-  // identificação confiável do espelho após reload.
+  // Para cartões: usa l.mes/l.ano (mês da fatura), não o vencimento do boleto.
+  // A fatura do cartão é paga 100% por você (titular + adicional), então TODAS as
+  // compras entram no total — inclusive as de terceiro (Entrada Terceiro / Dívida de
+  // terceiros). Quem te deve é controlado à parte (aba Terceiros / a-receber), sem
+  // reduzir o card. Espelhos em sessão (_espelhoDe) ficam de fora pra não duplicar;
+  // a geração automática de espelho já está desligada desde 2026-06.
   const lancCartao = all.filter(l => {
     if (!isCartaoLanc(l)) return false;
     if (l._espelhoDe) return false;
-    if (l.categoria === 'Entrada Terceiro') return false;
     // A fatura do cartão é definida pelo VENCIMENTO, não pela competência (mes/ano).
     return (typeof _inRangeVenc === 'function') ? _inRangeVenc(l) : _inRange(l);
   });

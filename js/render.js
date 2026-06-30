@@ -2184,12 +2184,11 @@ function renderCatChart(despesas) {
     byOutros[key] = (byOutros[key]||0) + _valorExib(l);
   });
   // Cartões: fatura COMPLETA do cartão — não filtra por banco, por VENCIMENTO,
-  // sem terceiros (igual à aba Cartões e à lista de Lançamentos).
-  const _EXCL_CART = { 'Entrada Terceiro': 1, 'Dividas de terceiros': 1 };
+  // 100% das compras (inclui terceiro/adicional, igual à aba Cartões). O controle
+  // de quem te deve fica na aba Terceiros, sem reduzir o total da fatura.
   (loadData() || []).forEach(l => {
     if (l.tipo !== 'despesa') return;
     if (l._espelhoDe) return;
-    if (_EXCL_CART[l.categoria]) return;
     if (!cartaoNomes.has(norm(l.pagamento))) return;
     if (typeof _inRangeVenc === 'function' && !_inRangeVenc(l)) return;
     byCartao[l.pagamento] = (byCartao[l.pagamento]||0) + Math.abs(_valorExib(l));
@@ -4698,6 +4697,7 @@ function renderImportPreview(rows) {
   var _byData = {}, _byParc = {}, _byVal = {}, _byFixed = {};
   var _byValParcDate = {}, _byValDate = {}, _byValParc = {}, _bySplitFull = {};
   var _grpParcDate = {};
+  var _grpDateDesc = {};
   var _add = function(map, k, l) { (map[k] = map[k] || []).push(l); };
   // Período (YYYYMM) PELO VENCIMENTO da fatura — o pareamento é escopado por venc:
   // uma compra de junho só casa com lançamento de venc junho (recorrentes de maio
@@ -4728,6 +4728,10 @@ function renderImportPreview(rows) {
       if (pt && pt > 1) { if (dt) _add(_bySplitFull, vp+'|'+t+'|'+fc+'|'+pt+'|'+dt, l); _add(_bySplitFull, vp+'|'+t+'|'+fc+'|'+pt, l); }
     }
     if (pt && pt > 1 && dt) { var gk = vp+'|'+t+'|'+pt+'|'+dt; (_grpParcDate[gk] = _grpParcDate[gk] || []).push({ l: l, c: v }); }
+    // Grupo por venc+tipo+data+descrição (inclui NÃO-parcelados): permite reconhecer
+    // um lançamento dividido pela função "Dividir" cujas partes (minha parte +
+    // Dívida de terceiros) somam o valor cheio da linha da fatura no reimport.
+    if (dt && dn) { var gd = vp+'|'+t+'|'+dt+'|'+dn; (_grpDateDesc[gd] = _grpDateDesc[gd] || []).push({ l: l, c: v }); }
   });
 
   var _consumed = (typeof Set !== 'undefined') ? new Set() : null;
@@ -4742,6 +4746,23 @@ function renderImportPreview(rows) {
   var _splitSumMatch = function(vp, t, vCents, pt, dt) {
     if (!(pt > 1) || !dt) return null;
     var grp = _grpParcDate[vp+'|'+t+'|'+pt+'|'+dt];
+    if (!grp) return null;
+    var arr = grp.filter(function(x){ return !_isUsed(x.l); });
+    if (arr.length < 2) return null;
+    var n = Math.min(arr.length, 14);
+    for (var mask = 1; mask < (1 << n); mask++) {
+      var s = 0, bits = 0, picks = [];
+      for (var j = 0; j < n; j++) if (mask & (1 << j)) { s += arr[j].c; bits++; picks.push(arr[j].l); }
+      if (bits >= 2 && s === vCents) { picks.forEach(_use); return picks; }
+    }
+    return null;
+  };
+  // Split por soma GENÉRICO (inclui não-parcelados): partes com mesmo venc+tipo+data+descrição
+  // que somam o valor cheio da linha da fatura → linha já lançada (foi dividida via "Dividir").
+  // Ex.: "Pague Conta IPVA" dividido em 2; no reimport a soma das partes bate com a compra.
+  var _splitSumMatchDD = function(vp, t, vCents, dt, dn) {
+    if (!dt || !dn) return null;
+    var grp = _grpDateDesc[vp+'|'+t+'|'+dt+'|'+dn];
     if (!grp) return null;
     var arr = grp.filter(function(x){ return !_isUsed(x.l); });
     if (arr.length < 2) return null;
@@ -4792,6 +4813,9 @@ function renderImportPreview(rows) {
   }
   // Camada final: split por soma das partes (consome e registra TODAS as partes)
   rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var picks = _splitSumMatch(k.vp, k.t, k.v, k.pt, k.dt); if (picks) { r._existingMatch = picks[0]; r._matchIds = _ids(picks); } });
+  // Camada final 2: split por soma genérico — pega lançamentos divididos NÃO-parcelados
+  // (ex.: IPVA dividido em 2) que o passe acima, restrito a parcelados, não enxerga.
+  rows.forEach(function(r) { if (r._existingMatch) return; var k = _keys(r); var picks = _splitSumMatchDD(k.vp, k.t, k.v, k.dt, k.dn); if (picks) { r._existingMatch = picks[0]; r._matchIds = _ids(picks); } });
   rows.forEach(function(r) { if (!r._existingMatch) { r._existingMatch = null; r._matchIds = []; } });
 
   var _dups    = rows.filter(function(r) { return r._existingMatch; });
@@ -5206,7 +5230,7 @@ function _platTotalItau() {
     if (np(l.pagamento).indexOf('black ita') === -1) return;
     if (l.tipo && l.tipo !== 'despesa') return;
     if (l._espelhoDe) return;
-    if (l.categoria === 'Entrada Terceiro') return;
+    // Card = 100% da fatura, inclui terceiro/adicional (alinhado a renderCartoesTab).
     if (m) { var pr = per(l); if (pr.m !== m || pr.a !== a) return; }
     tot += parseFloat(l.valor) || 0; n++;
   });
@@ -5413,7 +5437,8 @@ function conferirFaturaPlataforma() {
 
   // Lançamentos da plataforma — SEMPRE pelo VENCIMENTO da fatura (o que importa é a
   // que fatura o lançamento pertence, não o mês de competência): pagamento Black Itaú,
-  // tipo despesa, vencimento no mês/ano alvo, excluindo espelhos e "Entrada Terceiro".
+  // tipo despesa, vencimento no mês/ano alvo, excluindo só espelhos em sessão. O card
+  // é 100% da fatura, então terceiro/adicional também conta (alinhado a renderCartoesTab).
   var all = (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) ? _memCache.lancamentos : [];
   var npg = function(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
   // Período (mês/ano) de um lançamento PELO VENCIMENTO (fallback p/ mes/ano se sem venc)
@@ -5427,7 +5452,6 @@ function conferirFaturaPlataforma() {
     if (npg(l.pagamento).indexOf('black ita') === -1) return false;
     if (l.tipo && l.tipo !== 'despesa') return false;
     if (l._espelhoDe) return false;
-    if (l.categoria === 'Entrada Terceiro') return false;
     if (!alvoMes) return true;
     var pr = _periodo(l);
     return pr.m === alvoMes && pr.a === alvoAno;
@@ -5650,6 +5674,15 @@ function confirmImport() {
   if (confirm(msg)) doImport();
 }
 
+// Resolve o id do banco "Itaú" cadastrado (match por nome normalizado contendo "itau").
+// Usado no import da fatura Black Itaú pra amarrar todos os lançamentos ao Banco Itaú.
+function _bancoItauId() {
+  var bs = (typeof loadBancos === 'function') ? (loadBancos() || []) : [];
+  var n = function(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); };
+  var hit = bs.find(function(b){ return n(b.nome).indexOf('itau') !== -1; });
+  return hit ? hit.id : null;
+}
+
 function doImport() {
   try { _doImportInner(); } catch(e) { alert('Erro ao importar: ' + e.message + '\n' + e.stack); }
 }
@@ -5747,7 +5780,10 @@ function _doImportInner() {
     var recorrType = isParc ? 'parcelado' : (isFixo ? 'fixo' : undefined);
     var needsGroup = isParc || isFixo;
     var savedValor = r.originalSign < 0 ? -r.value : r.value;
-    var bancoAtualImport = getBancoAtivo() || '';
+    // Import "Black Itaú (layout do banco)": o banco é SEMPRE o Itaú, não o do
+    // contexto ativo. window._itauDiag é setado só quando o arquivo foi lido como
+    // fatura crua do Itaú. Se não houver banco "Itaú" cadastrado, cai no ativo.
+    var bancoAtualImport = (window._itauDiag ? (_bancoItauId() || getBancoAtivo()) : getBancoAtivo()) || '';
     var p0 = {
       id: baseId + '_0', tipo: chosenTipo, data: r.date, valor: savedValor,
       desc: r.desc, categoria: chosenCat, subCategoria: chosenSub,
