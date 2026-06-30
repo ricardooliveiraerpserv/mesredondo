@@ -5729,6 +5729,12 @@ function _doImportInner() {
     var sign = obj.valor < 0 ? -1 : 1;
     obj._splitFull = full; // valor cheio original (p/ dedup reconhecer no reimport)
     obj.valor = sign * (Math.round((full - tval) * 100) / 100); // minha parte
+    // Minha parte é MEU gasto: nunca categoria de terceiro nem terceiro vinculado.
+    // Se a linha veio como "Dividas de terceiros"/"Entrada Terceiro", limpa a categoria
+    // (eu classifico como despesa real depois) — só a parte desmembrada é de terceiro.
+    var _TERC_CATS = { 'Dividas de terceiros':1, 'Divida de terceiros':1, 'Entrada Terceiro':1 };
+    if (_TERC_CATS[obj.categoria]) { obj.categoria = ''; obj.subCategoria = ''; }
+    if (obj.terceiro) delete obj.terceiro;
     lancamentos.push(obj); added++;
     var t = Object.assign({}, obj, {
       id: obj.id + '_t',
