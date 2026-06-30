@@ -110,8 +110,12 @@
           // Se todos os reais ficaram marcados, volta ao estado canônico "Todos"
           if(realVals.length && realVals.every(function(x){ return st.has(x); })){
             _state[selId] = new Set();
+          } else if(st.size > 0){
+            _state[selId] = st;
           } else {
-            _state[selId] = st.size > 0 ? st : new Set();
+            // Desmarcou o ÚLTIMO item da seleção parcial → "Nenhum" (tudo desmarcado),
+            // NÃO "Todos" (que renderizava tudo marcado — o bug "desflega e flega tudo").
+            _state[selId] = new Set(['__nenhum__']);
           }
         }
         _renderChips(selId, opts);
