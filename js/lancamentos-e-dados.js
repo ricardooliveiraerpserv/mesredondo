@@ -359,8 +359,9 @@ function renderTerceirosTab() {
   const _cf = window._tercCardFilter;
 
   const nomeF    = _cf ? [_cf.nome] : (window.FSEL ? FSEL.getValues('filtroTerceiroNome')   : []);
-  const tipoF    = _cf ? (_cf.tipo && _cf.tipo !== 'todos' ? [_cf.tipo] : []) : (window.FSEL ? FSEL.getValues('filtroTerceiroTipo')   : []);
-  const statusF  = window.FSEL ? FSEL.getValues('filtroTerceiroStatus') : [];
+  const tipoF    = _cf ? [] : (window.FSEL ? FSEL.getValues('filtroTerceiroTipo')   : []);
+  // Card ativo: botões Recebido/Não recebido/Pendente filtram a lista por status (pago/agendado/pendente).
+  const statusF  = _cf ? (_cf.status ? [_cf.status] : []) : (window.FSEL ? FSEL.getValues('filtroTerceiroStatus') : []);
   const subCatF  = window.FSEL ? FSEL.getValues('filtroTerceiroSubCat') : [];
   const pagF     = window.FSEL ? FSEL.getValues('filtroTerceiroPag')    : [];
   const bancoF   = window.FSEL ? FSEL.getValues('filtroTerceiroBanco')  : [];
@@ -579,7 +580,7 @@ function renderTerceirosTab() {
         const tipoC   = terc?.tipo==='devedor'?'#22c55e':terc?.tipo==='credor'?'#ef4444':'#94a3b8';
         const cardId = 'terc-card-' + nome.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
         const isActive = window._tercCardFilter && window._tercCardFilter.nome === nome;
-        const activeTipo = isActive ? (window._tercCardFilter.tipo || 'todos') : 'todos';
+        const activeStatus = isActive ? (window._tercCardFilter.status || '') : '';
         const activeGlow = isActive ? `box-shadow:0 0 0 2px ${topC},0 4px 16px rgba(0,0,0,0.3);` : '';
         return `<div id="${cardId}" style="background:var(--surface);border:1px solid ${isActive ? topC : borderC};border-top:3px solid ${topC};border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color 150ms,box-shadow 150ms;${activeGlow}" onclick="_tercCardClick('${nome.replace(/'/g,"\\'")}')">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -601,9 +602,9 @@ function renderTerceirosTab() {
             </div>
           </div>
           ${isActive ? `<div style="display:flex;gap:4px;border-top:1px solid var(--border);padding-top:7px" onclick="event.stopPropagation()">
-            <button onclick="_tercCardTipo('${nome.replace(/'/g,"\\'")}','todos')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeTipo==='todos'?topC:'var(--border)'};background:${activeTipo==='todos'?topC+'22':'transparent'};color:${activeTipo==='todos'?topC:'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Todos</button>
-            <button onclick="_tercCardTipo('${nome.replace(/'/g,"\\'")}','entrada')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeTipo==='entrada'?'#22c55e':'var(--border)'};background:${activeTipo==='entrada'?'rgba(34,197,94,0.15)':'transparent'};color:${activeTipo==='entrada'?'#22c55e':'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Receita</button>
-            <button onclick="_tercCardTipo('${nome.replace(/'/g,"\\'")}','divida')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeTipo==='divida'?'#ef4444':'var(--border)'};background:${activeTipo==='divida'?'rgba(239,68,68,0.15)':'transparent'};color:${activeTipo==='divida'?'#ef4444':'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Despesa</button>
+            <button onclick="_tercCardStatus('${nome.replace(/'/g,"\\'")}','pago')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeStatus==='pago'?'#22c55e':'var(--border)'};background:${activeStatus==='pago'?'rgba(34,197,94,0.15)':'transparent'};color:${activeStatus==='pago'?'#22c55e':'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Recebido</button>
+            <button onclick="_tercCardStatus('${nome.replace(/'/g,"\\'")}','agendado')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeStatus==='agendado'?'#60a5fa':'var(--border)'};background:${activeStatus==='agendado'?'rgba(96,165,250,0.15)':'transparent'};color:${activeStatus==='agendado'?'#60a5fa':'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Não recebido</button>
+            <button onclick="_tercCardStatus('${nome.replace(/'/g,"\\'")}','pendente')" style="flex:1;padding:3px 0;border-radius:5px;border:1px solid ${activeStatus==='pendente'?'#f59e0b':'var(--border)'};background:${activeStatus==='pendente'?'rgba(245,158,11,0.15)':'transparent'};color:${activeStatus==='pendente'?'#f59e0b':'var(--text2)'};font-size:0.6rem;font-weight:700;cursor:pointer;font-family:var(--font)">Pendente</button>
           </div>` : `<div style="font-size:0.58rem;color:var(--muted);text-align:center;opacity:0.6">clique para filtrar</div>`}
           ${terc?.obs?`<div style="font-size:0.6rem;color:var(--muted);margin-top:5px;font-style:italic">${terc.obs}</div>`:''}
         </div>`;
@@ -912,10 +913,16 @@ function clearTercBulk() {
 window._tercCardFilter = null;
 function _tercCardClick(nome) {
   if (window._tercCardFilter && window._tercCardFilter.nome === nome) { window._tercCardFilter = null; }
-  else { window._tercCardFilter = { nome, tipo: 'todos' }; }
+  else { window._tercCardFilter = { nome, status: null }; }
   renderTerceirosTab();
 }
-function _tercCardTipo(nome, tipo) { window._tercCardFilter = { nome, tipo }; renderTerceirosTab(); }
+// Botões do card filtram por status; clicar no ativo limpa (volta a mostrar todos).
+function _tercCardStatus(nome, status) {
+  const cur = window._tercCardFilter;
+  const next = (cur && cur.nome === nome && cur.status === status) ? null : status;
+  window._tercCardFilter = { nome, status: next };
+  renderTerceirosTab();
+}
 
 
 // ======== FORMAS DE PAGAMENTO ========
@@ -1666,8 +1673,8 @@ window.exportarExcelTerceiros = function () {
   // Mesma derivação de filtros do renderTerceirosTab (card filter > FSEL)
   const _cf = window._tercCardFilter;
   const nomeF   = _cf ? [_cf.nome] : (window.FSEL ? FSEL.getValues('filtroTerceiroNome') : []);
-  const tipoF   = _cf ? (_cf.tipo && _cf.tipo !== 'todos' ? [_cf.tipo] : []) : (window.FSEL ? FSEL.getValues('filtroTerceiroTipo') : []);
-  const statusF = window.FSEL ? FSEL.getValues('filtroTerceiroStatus') : [];
+  const tipoF   = _cf ? [] : (window.FSEL ? FSEL.getValues('filtroTerceiroTipo') : []);
+  const statusF = _cf ? (_cf.status ? [_cf.status] : []) : (window.FSEL ? FSEL.getValues('filtroTerceiroStatus') : []);
   const subCatF = window.FSEL ? FSEL.getValues('filtroTerceiroSubCat') : [];
   const pagF    = window.FSEL ? FSEL.getValues('filtroTerceiroPag')    : [];
   const bancoF  = window.FSEL ? FSEL.getValues('filtroTerceiroBanco')  : [];
