@@ -930,6 +930,7 @@ function editLancamento(id) { openModal(id); }
       '<div style="height:1px;background:var(--border);margin:3px 0"></div>' +
       _menuItem('✎', 'Editar',   'var(--accent2)', `editLancamento('${id}')`) +
       _menuItem('⧉', 'Copiar',   '#60a5fa',        `copiarLancamento('${id}')`) +
+      _menuItem('✂️', 'Desmembrar p/ terceiro', 'var(--accent)', `openSplitLanc('${id}')`) +
       '<div style="height:1px;background:var(--border);margin:3px 0"></div>' +
       _menuItem('✕', 'Excluir',  'var(--danger)',   `smartDelete('${id}',${grpArg},event)`);
     // Position
@@ -5352,6 +5353,13 @@ async function _excluirExtrasItau() {
 // (no cartão) + espelho "Entrada Terceiro" (conta a receber, pendente).
 var _splitIdx = -1;
 var _splitMode = 'valor'; // 'valor' | 'pct'
+var _splitSavedLanc = null; // quando setado, o desmembrar opera sobre um lançamento JÁ SALVO
+// Alvo atual do desmembrar: linha de import (importParsedRows) ou lançamento salvo.
+function _splitTarget() {
+  if (_splitSavedLanc) return { value: Math.abs(parseFloat(_splitSavedLanc.valor) || 0), desc: _splitSavedLanc.desc || '' };
+  var r = importParsedRows[_splitIdx];
+  return r ? { value: r.value, desc: r.desc || r.descRaw || '' } : null;
+}
 function _splitBadgeHtml(r) {
   if (!r || !r._split || !(r._split.value > 0)) return '';
   var pctTxt = r._split.pct ? ' (' + r._split.pct + '%)' : '';
@@ -5359,9 +5367,9 @@ function _splitBadgeHtml(r) {
 }
 // Valor do terceiro a partir do input, conforme o modo (R$ direto ou % do total).
 function _splitTercVal() {
-  var r = importParsedRows[_splitIdx]; if (!r) return 0;
+  var t = _splitTarget(); if (!t) return 0;
   var raw = parseFloat(document.getElementById('splitValor').value) || 0;
-  if (_splitMode === 'pct') return Math.round(r.value * raw) / 100;
+  if (_splitMode === 'pct') return Math.round(t.value * raw) / 100;
   return Math.round(raw * 100) / 100;
 }
 function _splitSetMode(m) {
@@ -5376,6 +5384,7 @@ function _splitSetMode(m) {
   _splitUpdateInfo();
 }
 function openSplit(idx) {
+  _splitSavedLanc = null; // modo import
   _splitIdx = idx;
   var r = importParsedRows[idx];
   if (!r) return;
@@ -5396,16 +5405,17 @@ function openSplit(idx) {
   document.getElementById('splitOverlay').style.display = 'flex';
 }
 function _splitUpdateInfo() {
-  var r = importParsedRows[_splitIdx]; if (!r) return;
+  var t = _splitTarget(); if (!t) return;
   var tval = _splitTercVal();
   var pctTxt = (_splitMode === 'pct') ? ' (' + (parseFloat(document.getElementById('splitValor').value) || 0) + '%)' : '';
   var pv = document.getElementById('splitPreview');
   if (tval <= 0) { pv.innerHTML = '<span style="color:var(--muted)">Informe quanto desse lançamento é do terceiro (' + (_splitMode === 'pct' ? '%' : 'R$') + ').</span>'; return; }
-  if (tval >= r.value) { pv.innerHTML = '<span style="color:#ef4444">A parte do terceiro deve ser menor que ' + fmtBR(r.value) + '.</span>'; return; }
-  var me = Math.round((r.value - tval) * 100) / 100;
+  if (tval >= t.value) { pv.innerHTML = '<span style="color:#ef4444">A parte do terceiro deve ser menor que ' + fmtBR(t.value) + '.</span>'; return; }
+  var me = Math.round((t.value - tval) * 100) / 100;
   pv.innerHTML = 'Sua parte (despesa): <strong>' + fmtBR(me) + '</strong><br>Parte do terceiro (Dívida de terceiros → a receber): <strong style="color:var(--accent)">' + fmtBR(tval) + pctTxt + '</strong>';
 }
 function confirmSplit() {
+  if (_splitSavedLanc) { _confirmSplitLancSaved(); return; }
   var r = importParsedRows[_splitIdx]; if (!r) return;
   var tval = _splitTercVal();
   var terc = document.getElementById('splitTerceiro').value;
@@ -5421,7 +5431,92 @@ function removeSplit() {
   var b = document.getElementById('split-badge-' + _splitIdx); if (b) b.innerHTML = '';
   closeSplit();
 }
-function closeSplit() { var ov = document.getElementById('splitOverlay'); if (ov) ov.style.display = 'none'; }
+function closeSplit() { var ov = document.getElementById('splitOverlay'); if (ov) ov.style.display = 'none'; _splitSavedLanc = null; }
+
+// Abre o desmembrar para um lançamento JÁ SALVO (menu da linha em Lançamentos).
+function openSplitLanc(id) {
+  if (typeof _closeRowMenu === 'function') _closeRowMenu();
+  var l = (loadData() || []).find(function(x){ return String(x.id) === String(id); });
+  if (!l) { alert('Lançamento não encontrado.'); return; }
+  if (l.tipo === 'receita') { alert('Desmembrar p/ terceiro vale só para despesas.'); return; }
+  if (l._espelhoDe || l.categoria === 'Entrada Terceiro') { alert('Esse lançamento já é a-receber de terceiro; não dá pra desmembrar.'); return; }
+  _splitSavedLanc = l;
+  _splitIdx = -1;
+  var full = Math.abs(parseFloat(l.valor) || 0);
+  document.getElementById('splitInfo').innerHTML = '<strong>' + (l.desc || '—') + '</strong><br>Valor total: <strong>' + fmtBR(full) + '</strong>';
+  var sel = document.getElementById('splitTerceiro');
+  var tercs = (typeof loadTerceiros === 'function') ? (loadTerceiros() || []) : [];
+  sel.innerHTML = '<option value="">— selecione —</option>' + tercs.slice().sort(function(a, b) { return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); }).map(function(t) { return '<option value="' + (t.nome || '').replace(/"/g, '&quot;') + '">' + (t.nome || '') + '</option>'; }).join('');
+  document.getElementById('splitValor').value = '';
+  _splitSetMode('valor');
+  if (l.terceiro) sel.value = l.terceiro;
+  document.getElementById('splitRemoveBtn').style.display = 'none';
+  _splitUpdateInfo();
+  document.getElementById('splitOverlay').style.display = 'flex';
+}
+
+// Confirma o desmembrar de um lançamento salvo: minha parte (update no original,
+// sem categoria de terceiro) + parte do terceiro (novo "Dividas de terceiros").
+function _confirmSplitLancSaved() {
+  var l = _splitSavedLanc; if (!l) return;
+  var full = Math.abs(parseFloat(l.valor) || 0);
+  var tval = _splitTercVal();
+  var terc = document.getElementById('splitTerceiro').value;
+  if (tval <= 0 || tval >= full) { alert('A parte do terceiro deve ficar entre 0,01 e ' + fmtBR(full) + '.'); return; }
+  if (!terc) { alert('Selecione o terceiro.'); return; }
+  var sign = (parseFloat(l.valor) || 0) < 0 ? -1 : 1;
+  var minha = Math.round((full - tval) * 100) / 100;
+
+  // garante o terceiro cadastrado (igual ao import)
+  if (typeof loadTerceiros === 'function' && typeof saveTerceiros === 'function') {
+    var _tNorm = function(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); };
+    var tcs = loadTerceiros() || [];
+    if (!tcs.some(function(t){ return _tNorm(t.nome) === _tNorm(terc); })) {
+      tcs.push({ id: 'terc_split_' + Date.now() + '_' + Math.random().toString(36).slice(2,5), nome: terc, tipo: 'ambos', obs: '' });
+      saveTerceiros(tcs);
+    }
+  }
+
+  var _TERC_CATS = { 'Dividas de terceiros':1, 'Divida de terceiros':1, 'Entrada Terceiro':1 };
+  var minhaCat = _TERC_CATS[l.categoria] ? '' : (l.categoria || '');
+  var minhaSub = (minhaCat === (l.categoria || '')) ? (l.subCategoria || '') : '';
+
+  // Original vira "minha parte" — objeto COMPLETO (dbUpdateLancamento com valor usa _lancToDbRow)
+  var orig = Object.assign({}, l, { valor: sign * minha, categoria: minhaCat, subCategoria: minhaSub });
+  delete orig.terceiro; // minha parte não tem terceiro
+  delete orig._espelhoDe;
+
+  // Parte do terceiro — novo lançamento "Dividas de terceiros"
+  var nova = Object.assign({}, l, {
+    id: 'split_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    valor: sign * tval,
+    categoria: 'Dividas de terceiros',
+    subCategoria: '',
+    terceiro: terc,
+    recebido: false,
+    groupId: l.groupId ? (l.groupId + '_t') : undefined,
+    _ts: Date.now()
+  });
+  delete nova.__dupUsed;
+
+  // Atualização otimista no cache em memória
+  if (typeof _memCache !== 'undefined' && _memCache && _memCache.lancamentos) {
+    _memCache.lancamentos = _memCache.lancamentos.map(function(x){
+      if (String(x.id) !== String(l.id)) return x;
+      var u = Object.assign({}, x, { valor: sign * minha, categoria: minhaCat, subCategoria: minhaSub });
+      delete u.terceiro;
+      return u;
+    }).concat([nova]);
+  }
+
+  closeSplit();
+  if (typeof _rerenderActiveView === 'function') _rerenderActiveView(); else if (typeof renderAll === 'function') renderAll();
+
+  // Persiste: PATCH no original (objeto completo) + INSERT da parte do terceiro
+  if (typeof dbUpdateLancamento === 'function') dbUpdateLancamento(l.id, orig).catch(function(e){ console.error('[splitLanc update]', e && e.message); });
+  if (typeof dbSaveLancamento === 'function') dbSaveLancamento(nova).catch(function(e){ console.error('[splitLanc insert]', e && e.message); });
+  if (typeof sbSave === 'function') setTimeout(function(){ try { sbSave(); } catch(e){} }, 600);
+}
 
 // Conferência: cruza a fatura carregada (compras) com os lançamentos já na
 // plataforma (Black Itaú, mesmo mês de vencimento) e mostra a diferença dos 2 lados.
