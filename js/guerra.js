@@ -1,6 +1,7 @@
-// ⚔️ GUERRA À DÍVIDA — controle operacional p/ quitar R$ 37.000 em até 4 semanas.
-// Regras fixas (hardcoded): limite variável semanal R$ 350; meta saldo=0 em 4 semanas;
-// todo valor recebido → abate a dívida. Persistência local (mf_guerra).
+// ⚔️ GUERRA À DÍVIDA — controle operacional p/ quitar a dívida em até 4 semanas.
+// Persistência: Supabase (mf_guerra + mf_guerra_transacoes). NUNCA guarda saldo:
+// saldo = saldo_inicial − SUM(transacoes.valor). Regras fixas: limite variável
+// R$ 350/semana; meta saldo=0 em N semanas; todo valor recebido → abate a dívida.
 
 var GUERRA_DIVIDA_DEFAULT = 37000;
 var GUERRA_LIMITE_SEMANAL = 350;
@@ -12,33 +13,62 @@ var GUERRA_ATIVOS = [
   { id: 'airpods',  nome: 'AirPods',           esp: 550  },
   { id: 'asx',      nome: 'Carro ASX',         esp: 25000 }
 ];
-// Timeline planejada e alvo de saldo por semana (p/ status ATRASADO/RISCO)
 var GUERRA_TIMELINE = [
   { sem: 'S1',   desc: 'Eletrônicos', entrada: 8000,  alvo: 29000 },
   { sem: 'S2–3', desc: 'ASX',         entrada: 25000, alvo: 4000  },
   { sem: 'S4',   desc: 'Surplus (restante)', entrada: null, alvo: 0 }
 ];
-var GUERRA_KEY = 'mf_guerra';
 
-function _guerraLoad() {
-  var def = { dividaInicial: GUERRA_DIVIDA_DEFAULT, inicio: null, pagamentos: [], ativos: {} };
-  try {
-    var c = JSON.parse(localStorage.getItem(GUERRA_KEY) || '{}');
-    var m = Object.assign(def, c, { pagamentos: c.pagamentos || [], ativos: c.ativos || {} });
-    if (!m.inicio) { m.inicio = new Date().toISOString().slice(0, 10); _guerraSave(m); }
-    return m;
-  } catch (e) { def.inicio = new Date().toISOString().slice(0, 10); return def; }
-}
-function _guerraSave(c) { try { localStorage.setItem(GUERRA_KEY, JSON.stringify(c)); } catch (e) {} }
+// Estado em memória (espelho do Supabase). NÃO contém saldo — ele é sempre derivado.
+var _guerraState = null;     // { saldoInicial, metaSemanas, tx:[{id,tipo,descricao,valor,created_at}] }
+var _guerraLoading = false;
+
 function _gF(v) { return (typeof fmt === 'function') ? fmt(v) : ('R$ ' + (v || 0).toFixed(2)); }
 function _gNum(s) { if (s == null) return NaN; return parseFloat(String(s).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')); }
-function _gISO() { return new Date().toISOString().slice(0, 10); }
-
-function _guerraSemanaAtual(cfg) {
-  var ini = new Date((cfg.inicio || _gISO()) + 'T00:00:00');
-  var dias = Math.floor((new Date() - ini) / 86400000);
-  return Math.max(1, Math.floor(dias / 7) + 1);
+function _gISO() { return new Date().toISOString(); }
+function _guerraUuid() {
+  try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); });
 }
+
+// ── Supabase (reusa _dbFetch/_uid do db.js) ──
+async function _guerraFetch() {
+  var uid = _uid();
+  var rows = await _dbFetch('mf_guerra?user_id=eq.' + uid + '&select=*', 'GET');
+  var cfg = (rows && rows[0]) || null;
+  if (!cfg) {
+    cfg = { id: _guerraUuid(), user_id: uid, saldo_inicial: GUERRA_DIVIDA_DEFAULT, meta_semanas: GUERRA_META_SEMANAS };
+    await _dbFetch('mf_guerra', 'POST', cfg);
+  }
+  var tx = await _dbFetch('mf_guerra_transacoes?user_id=eq.' + uid + '&select=*&order=created_at.asc', 'GET') || [];
+  _guerraState = {
+    saldoInicial: Number(cfg.saldo_inicial) || 0,
+    metaSemanas: Number(cfg.meta_semanas) || GUERRA_META_SEMANAS,
+    tx: tx.map(function (t) { return { id: t.id, tipo: t.tipo, descricao: t.descricao, valor: Number(t.valor) || 0, created_at: t.created_at }; })
+  };
+}
+async function _guerraInsertTx(tipo, descricao, valor) {
+  var row = { id: _guerraUuid(), user_id: _uid(), tipo: tipo, descricao: descricao, valor: Math.round(valor * 100) / 100 };
+  // otimista
+  _guerraState.tx.push({ id: row.id, tipo: tipo, descricao: descricao, valor: row.valor, created_at: _gISO() });
+  renderGuerraTab();
+  try { await _dbFetch('mf_guerra_transacoes', 'POST', row); }
+  catch (e) { _guerraState.tx = _guerraState.tx.filter(function (t) { return t.id !== row.id; }); renderGuerraTab(); alert('Falha ao salvar: ' + (e && e.message || e)); }
+}
+async function _guerraDeleteTx(id) {
+  var bak = _guerraState.tx.slice();
+  _guerraState.tx = _guerraState.tx.filter(function (t) { return t.id !== id; });
+  renderGuerraTab();
+  try { await _dbFetch('mf_guerra_transacoes?id=eq.' + id + '&user_id=eq.' + _uid(), 'DELETE'); }
+  catch (e) { _guerraState.tx = bak; renderGuerraTab(); alert('Falha ao remover: ' + (e && e.message || e)); }
+}
+async function _guerraPatchSaldo(valor) {
+  _guerraState.saldoInicial = valor; renderGuerraTab();
+  try { await _dbFetch('mf_guerra?user_id=eq.' + _uid(), 'PATCH', { saldo_inicial: valor, updated_at: _gISO() }); }
+  catch (e) { alert('Falha ao salvar saldo: ' + (e && e.message || e)); }
+}
+
+// ── Métricas derivadas dos lançamentos (não persistidas) ──
 function _guerraStartWeek() { var d = new Date(); var day = (d.getDay() + 6) % 7; d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - day); return d; }
 function _guerraGastoSemana() {
   var all = (typeof loadData === 'function') ? (loadData() || []) : [];
@@ -68,6 +98,13 @@ function _guerraCaixaLivre() {
   });
   return rec - des;
 }
+// Semana da guerra = a partir da 1ª transação (ou semana 1 se ainda não houve)
+function _guerraSemanaAtual() {
+  if (!_guerraState || !_guerraState.tx.length) return 1;
+  var datas = _guerraState.tx.map(function (t) { return new Date(t.created_at); }).sort(function (a, b) { return a - b; });
+  var dias = Math.floor((new Date() - datas[0]) / 86400000);
+  return Math.max(1, Math.floor(dias / 7) + 1);
+}
 
 function _gKpi(cor, label, valor, sub) {
   return '<div style="flex:1;min-width:140px;background:var(--surface);border:1px solid var(--border);border-top:3px solid ' + cor + ';border-radius:12px;padding:13px 15px">' +
@@ -79,23 +116,35 @@ function _gKpi(cor, label, valor, sub) {
 function renderGuerraTab() {
   var host = document.getElementById('guerraContent');
   if (!host) return;
-  var cfg = _guerraLoad();
 
-  // ── cálculos ──
-  var pago = (cfg.pagamentos || []).reduce(function (s, p) { return s + (parseFloat(p.valor) || 0); }, 0);
-  var saldo = Math.max(0, (cfg.dividaInicial || 0) - pago);
-  var prog = cfg.dividaInicial > 0 ? Math.min(100, pago / cfg.dividaInicial * 100) : 0;
-  var vendas = GUERRA_ATIVOS.reduce(function (s, a) { var e = cfg.ativos[a.id]; return s + (e && e.vendido ? (parseFloat(e.valorReal) || 0) : 0); }, 0);
+  // Carrega do Supabase na 1ª vez
+  if (!_guerraState) {
+    if (!_guerraLoading) {
+      _guerraLoading = true;
+      host.innerHTML = '<div style="padding:28px;color:var(--muted);font-size:0.9rem">⚔️ Carregando guerra…</div>';
+      _guerraFetch().then(function () { _guerraLoading = false; renderGuerraTab(); })
+        .catch(function (e) { _guerraLoading = false; host.innerHTML = '<div style="padding:24px;color:var(--danger)">Erro ao carregar: ' + (e && e.message || e) + '<br><br>Rodou a migration <code>mf_guerra</code> no Supabase?</div>'; });
+    }
+    return;
+  }
+
+  var st = _guerraState;
+  var pago = st.tx.reduce(function (s, t) { return s + (t.valor || 0); }, 0);
+  var saldo = Math.max(0, st.saldoInicial - pago);
+  var prog = st.saldoInicial > 0 ? Math.min(100, pago / st.saldoInicial * 100) : 0;
+  var vendas = st.tx.filter(function (t) { return t.tipo === 'VENDA'; }).reduce(function (s, t) { return s + t.valor; }, 0);
   var vendasMeta = GUERRA_ATIVOS.reduce(function (s, a) { return s + a.esp; }, 0);
   var caixa = _guerraCaixaLivre();
   var gasto = _guerraGastoSemana();
   var travado = gasto > GUERRA_LIMITE_SEMANAL;
-  var semAtual = _guerraSemanaAtual(cfg);
+  var semAtual = _guerraSemanaAtual();
+  var meta = st.metaSemanas || GUERRA_META_SEMANAS;
   var alvoSem = (GUERRA_TIMELINE[Math.min(semAtual, GUERRA_TIMELINE.length) - 1] || {}).alvo;
   var acimaMeta = saldo > 0 && alvoSem != null && saldo > alvoSem;
-  var atrasado = saldo > 0 && semAtual > GUERRA_META_SEMANAS;
+  var atrasado = saldo > 0 && semAtual > meta;
+  function vendido(id) { var a = GUERRA_ATIVOS.find(function (x) { return x.id === id; }); return a && st.tx.some(function (t) { return t.tipo === 'VENDA' && t.descricao === a.nome; }); }
 
-  // ── STATUS GLOBAL ──
+  // STATUS GLOBAL
   var status, sCor, sBg;
   if (saldo <= 0) { status = '✅ QUITADO'; sCor = 'var(--green)'; sBg = 'rgba(48,208,128,.15)'; }
   else if (atrasado) { status = '⛔ ATRASADO'; sCor = 'var(--red)'; sBg = 'rgba(240,80,96,.15)'; }
@@ -110,9 +159,9 @@ function renderGuerraTab() {
   H.push('<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">');
   H.push('<div><div style="font-size:0.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">⚔️ Saldo da dívida</div>' +
     '<div style="font-family:\'Space Mono\',monospace;font-size:2.4rem;font-weight:700;color:' + (saldo <= 0 ? 'var(--green)' : 'var(--red)') + ';line-height:1.05">' + _gF(saldo) + '</div>' +
-    '<div style="font-size:0.72rem;color:var(--muted)">Meta: quitar em ' + GUERRA_META_SEMANAS + ' semanas · você está na <strong style="color:var(--text)">Semana ' + semAtual + '</strong></div></div>');
+    '<div style="font-size:0.72rem;color:var(--muted)">Meta: quitar em ' + meta + ' semanas · você está na <strong style="color:var(--text)">Semana ' + semAtual + '</strong></div></div>');
   H.push('<div style="text-align:right"><span style="display:inline-block;background:' + sBg + ';color:' + sCor + ';border:1px solid ' + sCor + ';border-radius:20px;padding:4px 14px;font-size:0.8rem;font-weight:700">' + status + '</span>' +
-    '<div style="margin-top:6px;font-size:0.72rem;color:var(--muted)">Pago <strong style="color:var(--green)">' + _gF(pago) + '</strong> de ' + _gF(cfg.dividaInicial) + '</div></div>');
+    '<div style="margin-top:6px;font-size:0.72rem;color:var(--muted)">Pago <strong style="color:var(--green)">' + _gF(pago) + '</strong> de ' + _gF(st.saldoInicial) + ' <button onclick="guerraRefresh()" title="Atualizar do servidor" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem">↻</button></div></div>');
   H.push('</div>');
   H.push('<div style="margin-top:12px;height:18px;background:var(--surface2);border-radius:9px;overflow:hidden;border:1px solid var(--border)">' +
     '<div style="height:100%;width:' + prog.toFixed(1) + '%;background:' + (saldo <= 0 ? 'var(--green)' : prog >= 50 ? 'var(--accent)' : 'var(--red)') + ';transition:width .4s"></div></div>');
@@ -121,25 +170,23 @@ function renderGuerraTab() {
 
   // (C) KPIs
   H.push('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">');
-  H.push(_gKpi('var(--red)', 'Saldo dívida', _gF(saldo), 'inicial ' + _gF(cfg.dividaInicial)));
-  H.push(_gKpi('var(--green)', 'Pago acumulado', _gF(pago), (cfg.pagamentos || []).length + ' aporte(s)'));
+  H.push(_gKpi('var(--red)', 'Saldo dívida', _gF(saldo), 'inicial ' + _gF(st.saldoInicial)));
+  H.push(_gKpi('var(--green)', 'Pago acumulado', _gF(pago), st.tx.length + ' transação(ões)'));
   H.push(_gKpi('#60a5fa', 'Vendas realizadas', _gF(vendas), 'meta ' + _gF(vendasMeta)));
   H.push(_gKpi(caixa >= 5000 ? 'var(--green)' : 'var(--accent)', 'Caixa livre (mês)', _gF(caixa), 'receita − despesa'));
   H.push(_gKpi(travado ? 'var(--red)' : 'var(--green)', 'Gasto semanal', _gF(gasto), 'limite ' + _gF(GUERRA_LIMITE_SEMANAL) + ' · ' + (travado ? 'BLOQUEADO' : 'OK')));
   H.push('</div>');
 
-  // (4) ALERTAS
+  // ALERTAS
   var alertas = [];
   if (travado) alertas.push(['var(--red)', '🚨 Gasto acima do limite — ' + _gF(gasto) + ' > ' + _gF(GUERRA_LIMITE_SEMANAL) + '. CONSUMO TRAVADO até o reset da semana.']);
   if (acimaMeta) alertas.push(['var(--accent)', '⚠️ Dívida acima da meta da Semana ' + semAtual + ' (alvo ≤ ' + _gF(alvoSem) + ', está em ' + _gF(saldo) + ').']);
   GUERRA_ATIVOS.forEach(function (a) {
-    var e = cfg.ativos[a.id]; var vendido = e && e.vendido;
-    if (!vendido) {
-      if (a.id === 'asx' && semAtual >= 3) alertas.push(['var(--red)', '⛔ Venda atrasada: ' + a.nome + ' deveria ter sido vendido até a Semana 3.']);
-      else if (a.id !== 'asx' && semAtual >= 2) alertas.push(['var(--accent)', '🏷️ Venda atrasada: ' + a.nome + ' (eletrônicos eram p/ Semana 1).']);
-    }
+    if (vendido(a.id)) return;
+    if (a.id === 'asx' && semAtual >= 3) alertas.push(['var(--red)', '⛔ Venda atrasada: ' + a.nome + ' deveria ter sido vendido até a Semana 3.']);
+    else if (a.id !== 'asx' && semAtual >= 2) alertas.push(['var(--accent)', '🏷️ Venda atrasada: ' + a.nome + ' (eletrônicos eram p/ Semana 1).']);
   });
-  if (atrasado) alertas.push(['var(--red)', '⛔ EXECUÇÃO EM RISCO: passou de ' + GUERRA_META_SEMANAS + ' semanas e a dívida não zerou.']);
+  if (atrasado) alertas.push(['var(--red)', '⛔ EXECUÇÃO EM RISCO: passou de ' + meta + ' semanas e a dívida não zerou.']);
   if (saldo <= 0) alertas.push(['var(--green)', '✅ Dívida quitada. Redirecione todo o caixa livre para a próxima dívida (bola de neve).']);
   if (alertas.length) {
     H.push('<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">');
@@ -152,9 +199,9 @@ function renderGuerraTab() {
   H.push('<div style="font-size:0.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">📅 Execução semanal (plano)</div>');
   H.push('<table style="width:100%;border-collapse:collapse;font-size:0.82rem"><thead><tr style="color:var(--muted);text-align:left">' +
     '<th style="padding:5px 8px">Semana</th><th style="padding:5px 8px">Entrada</th><th style="padding:5px 8px;text-align:right">Aplicado</th><th style="padding:5px 8px;text-align:right">Saldo planejado</th></tr></thead><tbody>');
-  var saldoPlan = cfg.dividaInicial;
+  var saldoPlan = st.saldoInicial;
   GUERRA_TIMELINE.forEach(function (t, i) {
-    var entrada = t.entrada != null ? t.entrada : Math.max(0, saldoPlan); // S4 = restante
+    var entrada = t.entrada != null ? t.entrada : Math.max(0, saldoPlan);
     saldoPlan = Math.max(0, saldoPlan - entrada);
     var atual = (i + 1) === Math.min(semAtual, GUERRA_TIMELINE.length);
     H.push('<tr style="border-top:1px solid var(--border);' + (atual ? 'background:rgba(240,192,64,.06)' : '') + '">' +
@@ -165,81 +212,77 @@ function renderGuerraTab() {
   });
   H.push('</tbody></table></div>');
 
-  // (3) CONTROLE DE VENDAS — itens fixos
+  // (3) CONTROLE DE VENDAS
   H.push('<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px;overflow-x:auto">');
   H.push('<div style="font-size:0.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">🏷️ Vendas de ativos</div>');
   H.push('<table style="width:100%;border-collapse:collapse;font-size:0.82rem"><thead><tr style="color:var(--muted);text-align:left">' +
     '<th style="padding:5px 8px">Item</th><th style="padding:5px 8px;text-align:right">Esperado</th><th style="padding:5px 8px;text-align:right">Real</th><th style="padding:5px 8px;text-align:center">Status</th><th></th></tr></thead><tbody>');
   GUERRA_ATIVOS.forEach(function (a) {
-    var e = cfg.ativos[a.id]; var vendido = e && e.vendido;
+    var v = vendido(a.id);
+    var txV = v ? st.tx.filter(function (t) { return t.tipo === 'VENDA' && t.descricao === a.nome; }).slice(-1)[0] : null;
     H.push('<tr style="border-top:1px solid var(--border)">' +
       '<td style="padding:6px 8px;font-weight:600">' + a.nome + '</td>' +
       '<td style="padding:6px 8px;text-align:right;font-family:\'Space Mono\',monospace;color:var(--muted)">' + _gF(a.esp) + '</td>' +
-      '<td style="padding:6px 8px;text-align:right;font-family:\'Space Mono\',monospace;color:' + (vendido ? '#60a5fa' : 'var(--muted)') + '">' + (vendido ? _gF(e.valorReal) : '—') + '</td>' +
-      '<td style="padding:6px 8px;text-align:center"><span class="badge badge-' + (vendido ? 'pago' : 'pendente') + '">' + (vendido ? '✓ Vendido' : '⏳ Pendente') + '</span></td>' +
-      '<td style="padding:6px 8px;text-align:right">' + (vendido
+      '<td style="padding:6px 8px;text-align:right;font-family:\'Space Mono\',monospace;color:' + (v ? '#60a5fa' : 'var(--muted)') + '">' + (v ? _gF(txV.valor) : '—') + '</td>' +
+      '<td style="padding:6px 8px;text-align:center"><span class="badge badge-' + (v ? 'pago' : 'pendente') + '">' + (v ? '✓ Vendido' : '⏳ Pendente') + '</span></td>' +
+      '<td style="padding:6px 8px;text-align:right">' + (v
         ? '<button onclick="guerraDesfazVenda(\'' + a.id + '\')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:3px 9px;font-size:0.72rem;cursor:pointer">desfazer</button>'
         : '<button onclick="guerraVender(\'' + a.id + '\')" style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.4);color:#60a5fa;border-radius:6px;padding:3px 11px;font-size:0.72rem;font-weight:700;cursor:pointer">Vender</button>') + '</td></tr>');
   });
   H.push('</tbody></table></div>');
 
-  // AÇÕES (pagamento manual + ajuste saldo inicial)
+  // AÇÕES
   H.push('<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">');
   H.push('<button onclick="guerraAddPagamento()" style="background:rgba(48,208,128,0.12);border:1px solid rgba(48,208,128,0.4);color:var(--green);border-radius:8px;padding:8px 14px;font-size:0.8rem;font-weight:700;cursor:pointer">💸 Registrar pagamento (surplus)</button>');
   H.push('<button onclick="guerraAjustarDivida()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:8px 14px;font-size:0.8rem;font-weight:700;cursor:pointer">⚙️ Ajustar saldo inicial</button>');
   H.push('</div>');
 
-  // LOG pagamentos
-  if ((cfg.pagamentos || []).length) {
+  // LOG transações
+  if (st.tx.length) {
     H.push('<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px">');
-    H.push('<div style="font-size:0.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">💸 Pagamentos na dívida</div>');
-    cfg.pagamentos.slice().reverse().forEach(function (p, ri) {
-      var idx = cfg.pagamentos.length - 1 - ri;
+    H.push('<div style="font-size:0.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">📒 Movimentos (abatem a dívida)</div>');
+    st.tx.slice().sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); }).forEach(function (t) {
+      var cor = t.tipo === 'VENDA' ? '#60a5fa' : 'var(--green)';
       H.push('<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:0.8rem">' +
-        '<span style="color:var(--muted);font-family:\'Space Mono\',monospace;font-size:0.72rem">' + (p.data || '') + '</span><span style="flex:1">' + (p.obs || 'aporte') + '</span>' +
-        '<span style="font-family:\'Space Mono\',monospace;color:var(--green)">' + _gF(p.valor) + '</span>' +
-        '<button onclick="guerraDelPagamento(' + idx + ')" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button></div>');
+        '<span style="color:' + cor + ';font-size:0.62rem;font-weight:700;border:1px solid ' + cor + ';border-radius:10px;padding:1px 7px">' + t.tipo + '</span>' +
+        '<span style="flex:1">' + (t.descricao || '') + '</span>' +
+        '<span style="font-family:\'Space Mono\',monospace;color:' + cor + '">' + _gF(t.valor) + '</span>' +
+        '<button onclick="guerraDelTx(\'' + t.id + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button></div>');
     });
     H.push('</div>');
   }
 
-  H.push('<div style="font-size:0.66rem;color:var(--muted);margin-top:10px">Limite semanal R$ 350 e meta de 4 semanas são fixos. Todo valor recebido abate a dívida automaticamente. Dados ficam neste dispositivo.</div>');
+  H.push('<div style="font-size:0.66rem;color:var(--muted);margin-top:10px">Limite semanal R$ 350 e meta de ' + meta + ' semanas são fixos. Saldo = saldo inicial − soma das transações (sincronizado no Supabase, RLS por usuário).</div>');
 
   host.innerHTML = H.join('');
 }
 
 // ── ações ──
+function guerraRefresh() { _guerraState = null; renderGuerraTab(); }
 function guerraVender(id) {
-  var a = GUERRA_ATIVOS.find(function (x) { return x.id === id; }); if (!a) return;
+  var a = GUERRA_ATIVOS.find(function (x) { return x.id === id; }); if (!a || !_guerraState) return;
   var v = _gNum(prompt('Valor REAL recebido na venda de "' + a.nome + '" (R$):', a.esp));
   if (isNaN(v) || v <= 0) return;
-  var cfg = _guerraLoad();
-  v = Math.round(v * 100) / 100;
-  cfg.ativos[id] = { vendido: true, valorReal: v, data: _gISO() };
-  cfg.pagamentos.push({ data: _gISO(), valor: v, obs: 'venda: ' + a.nome }); // todo valor → dívida
-  _guerraSave(cfg); renderGuerraTab();
+  _guerraInsertTx('VENDA', a.nome, v); // todo valor → dívida
 }
 function guerraDesfazVenda(id) {
-  var cfg = _guerraLoad(); var e = cfg.ativos[id]; if (!e) return;
-  if (!confirm('Desfazer a venda e retirar o valor da dívida?')) return;
-  var a = GUERRA_ATIVOS.find(function (x) { return x.id === id; });
-  // remove o pagamento correspondente (venda: nome)
-  var obs = 'venda: ' + (a ? a.nome : '');
-  for (var i = cfg.pagamentos.length - 1; i >= 0; i--) { if (cfg.pagamentos[i].obs === obs && Math.abs(cfg.pagamentos[i].valor - e.valorReal) < 0.01) { cfg.pagamentos.splice(i, 1); break; } }
-  delete cfg.ativos[id];
-  _guerraSave(cfg); renderGuerraTab();
+  if (!_guerraState) return;
+  var a = GUERRA_ATIVOS.find(function (x) { return x.id === id; }); if (!a) return;
+  var tx = _guerraState.tx.filter(function (t) { return t.tipo === 'VENDA' && t.descricao === a.nome; }).slice(-1)[0];
+  if (!tx) return;
+  if (!confirm('Desfazer a venda de "' + a.nome + '" e retirar o valor da dívida?')) return;
+  _guerraDeleteTx(tx.id);
 }
 function guerraAddPagamento() {
+  if (!_guerraState) return;
   var v = _gNum(prompt('Valor pago na dívida (surplus do mês, etc) — R$:'));
   if (isNaN(v) || v <= 0) return;
   var obs = prompt('Origem (ex: surplus do mês):', 'surplus') || 'surplus';
-  var cfg = _guerraLoad();
-  cfg.pagamentos.push({ data: _gISO(), valor: Math.round(v * 100) / 100, obs: obs });
-  _guerraSave(cfg); renderGuerraTab();
+  _guerraInsertTx('PAGAMENTO', obs, v);
 }
-function guerraDelPagamento(i) { var c = _guerraLoad(); if (c.pagamentos[i] && confirm('Remover este pagamento?')) { c.pagamentos.splice(i, 1); _guerraSave(c); renderGuerraTab(); } }
+function guerraDelTx(id) { if (_guerraState && confirm('Remover esta transação?')) _guerraDeleteTx(id); }
 function guerraAjustarDivida() {
-  var c = _guerraLoad();
-  var v = _gNum(prompt('Saldo inicial da dívida a quitar (R$):', c.dividaInicial));
-  if (!isNaN(v) && v >= 0) { c.dividaInicial = Math.round(v * 100) / 100; _guerraSave(c); renderGuerraTab(); }
+  if (!_guerraState) return;
+  var v = _gNum(prompt('Saldo inicial da dívida a quitar (R$):', _guerraState.saldoInicial));
+  if (!isNaN(v) && v >= 0) _guerraPatchSaldo(Math.round(v * 100) / 100);
 }
