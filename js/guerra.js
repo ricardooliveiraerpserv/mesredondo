@@ -22,6 +22,8 @@ var GUERRA_TIMELINE = [
 // Estado em memória (espelho do Supabase). NÃO contém saldo — ele é sempre derivado.
 var _guerraState = null;     // { saldoInicial, metaSemanas, tx:[{id,tipo,descricao,valor,created_at}] }
 var _guerraLoading = false;
+var _guerraAuthTries = 0;
+function _guerraAuthReady() { return !!(window._currentUser || (typeof _currentUser !== 'undefined' && _currentUser)); }
 
 function _gF(v) { return (typeof fmt === 'function') ? fmt(v) : ('R$ ' + (v || 0).toFixed(2)); }
 function _gNum(s) { if (s == null) return NaN; return parseFloat(String(s).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3})/g, '').replace(',', '.')); }
@@ -119,11 +121,25 @@ function renderGuerraTab() {
 
   // Carrega do Supabase na 1ª vez
   if (!_guerraState) {
+    // Espera a sessão estar pronta (boot pode renderizar a aba antes do login)
+    if (!_guerraAuthReady()) {
+      _guerraAuthTries++;
+      host.innerHTML = '<div style="padding:28px;color:var(--muted);font-size:0.9rem">⚔️ Aguardando sessão…</div>';
+      if (_guerraAuthTries < 15) setTimeout(renderGuerraTab, 700);
+      else host.innerHTML = '<div style="padding:24px;color:var(--danger)">Sessão não detectada. Faça login novamente e reabra a aba ⚔️ Guerra.</div>';
+      return;
+    }
+    _guerraAuthTries = 0;
     if (!_guerraLoading) {
       _guerraLoading = true;
       host.innerHTML = '<div style="padding:28px;color:var(--muted);font-size:0.9rem">⚔️ Carregando guerra…</div>';
       _guerraFetch().then(function () { _guerraLoading = false; renderGuerraTab(); })
-        .catch(function (e) { _guerraLoading = false; host.innerHTML = '<div style="padding:24px;color:var(--danger)">Erro ao carregar: ' + (e && e.message || e) + '<br><br>Rodou a migration <code>mf_guerra</code> no Supabase?</div>'; });
+        .catch(function (e) {
+          _guerraLoading = false;
+          var msg = (e && e.message) || String(e);
+          if (/n[ãa]o autenticado/i.test(msg)) { host.innerHTML = '<div style="padding:28px;color:var(--muted)">⚔️ Aguardando sessão…</div>'; setTimeout(renderGuerraTab, 700); return; }
+          host.innerHTML = '<div style="padding:24px;color:var(--danger)">Erro ao carregar: ' + msg + '<br><br>Rodou a migration <code>mf_guerra</code> no Supabase?</div>';
+        });
     }
     return;
   }
