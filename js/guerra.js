@@ -170,6 +170,25 @@ function renderGuerraTab() {
 
   var H = [];
 
+  // (0) AJUDA — "Como funciona" (abre/fecha; lembra o estado)
+  var helpOpen = localStorage.getItem('mf_guerra_help') !== '0';
+  H.push('<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden">');
+  H.push('<button onclick="guerraToggleHelp()" style="width:100%;display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--text);padding:12px 16px;cursor:pointer;font-size:0.85rem;font-weight:700;text-align:left">❔ Como funciona esta página<span style="margin-left:auto;color:var(--muted)">' + (helpOpen ? '▲' : '▼') + '</span></button>');
+  if (helpOpen) {
+    H.push('<div style="padding:0 16px 16px;font-size:0.82rem;color:var(--text2);line-height:1.55">');
+    H.push('Esta é a sua <strong>sala de guerra</strong> para zerar a dívida no menor tempo. Tudo num lugar só: quanto falta, o que já fez e se está no prazo.');
+    H.push('<ul style="margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px">');
+    H.push('<li><strong>Topo:</strong> quanto <strong>falta pagar</strong> + barra que enche até zerar. O selo se pinta sozinho: 🟢 No prazo · ⚠️ Em risco · 🔒 Travado (gastou demais) · ⛔ Atrasado · ✅ Quitado.</li>');
+    H.push('<li><strong>5 cartões:</strong> saldo · já pago · vendas · caixa livre do mês · gasto da semana (teto R$ 350 — passou, fica vermelho).</li>');
+    H.push('<li><strong>Plano semanal:</strong> o que fazer em cada semana e quanto a dívida deveria estar.</li>');
+    H.push('<li><strong>Vendas:</strong> clica <strong>“Vender”</strong>, digita quanto recebeu, e o valor <strong>desconta da dívida na hora</strong>.</li>');
+    H.push('<li><strong>Botões:</strong> “Registrar pagamento” (sobrou no mês → joga na dívida) e “Ajustar saldo inicial” (valor real quando o banco informar).</li>');
+    H.push('</ul>');
+    H.push('<div style="margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:0.78rem"><strong>Regra de ouro:</strong> todo dinheiro que entra abate a dívida. Você nunca digita o saldo — ele é sempre <strong>dívida inicial − tudo que já foi pago</strong>. Salvo na nuvem, aparece em qualquer aparelho.</div>');
+    H.push('</div>');
+  }
+  H.push('</div>');
+
   // (A) HEADER
   H.push('<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 22px;margin-bottom:14px">');
   H.push('<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">');
@@ -275,6 +294,7 @@ function renderGuerraTab() {
 
 // ── ações ──
 function guerraRefresh() { _guerraState = null; renderGuerraTab(); }
+function guerraToggleHelp() { var open = localStorage.getItem('mf_guerra_help') !== '0'; localStorage.setItem('mf_guerra_help', open ? '0' : '1'); renderGuerraTab(); }
 function guerraVender(id) {
   var a = GUERRA_ATIVOS.find(function (x) { return x.id === id; }); if (!a || !_guerraState) return;
   var v = _gNum(prompt('Valor REAL recebido na venda de "' + a.nome + '" (R$):', a.esp));
